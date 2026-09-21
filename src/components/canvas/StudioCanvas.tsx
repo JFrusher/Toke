@@ -1,7 +1,7 @@
 'use client';
 
 import * as fabric from 'fabric';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { snap, snapTargets } from '@/engine/canvas/snapping';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
@@ -24,6 +24,40 @@ let nextId = 0;
 function makeId(kind: string): NodeId {
   nextId += 1;
   return `${kind}-${nextId}`;
+}
+
+/**
+ * Groups hold their children in ABSOLUTE coordinates (see engine/canvas/arrange),
+ * so rendering needs no transform stack — only a flat list of leaves in paint
+ * order. A group itself draws nothing.
+ *
+ * Without this, grouping moved children out of the top-level array and they
+ * vanished from the canvas while still appearing in the layers tree.
+ */
+function renderableNodes(nodes: readonly SceneNode[]): SceneNode[] {
+  const flat: SceneNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === 'group') flat.push(...renderableNodes(node.children));
+    else flat.push(node);
+  }
+  return flat;
+}
+
+/** Leaf ids a selection covers: selecting a group selects everything inside it. */
+function selectedLeafIds(nodes: readonly SceneNode[], selection: readonly NodeId[]): NodeId[] {
+  const wanted = new Set(selection);
+  const ids: NodeId[] = [];
+
+  const visit = (list: readonly SceneNode[], inherited: boolean) => {
+    for (const node of list) {
+      const active = inherited || wanted.has(node.id);
+      if (node.kind === 'group') visit(node.children, active);
+      else if (active) ids.push(node.id);
+    }
+  };
+
+  visit(nodes, false);
+  return ids;
 }
 
 function buildFabricObject(node: SceneNode): fabric.FabricObject | null {
@@ -59,6 +93,7 @@ export function StudioCanvas() {
   /** True while we are writing Fabric → store, so the store → Fabric effect
    *  does not immediately overwrite what the user is dragging. */
   const fromFabric = useRef(false);
+  const [renderedCount, setRenderedCount] = useState(0);
 
   const nodes = useCanvasStore((s) => s.nodes);
   const selection = useCanvasStore((s) => s.selection);
@@ -162,7 +197,8 @@ export function StudioCanvas() {
     if (canvas === null || fromFabric.current) return;
 
     const objects = objectsRef.current;
-    const live = new Set(nodes.map((node) => node.id));
+    const renderable = renderableNodes(nodes);
+    const live = new Set(renderable.map((node) => node.id));
 
     for (const [id, object] of objects) {
       if (!live.has(id)) {
@@ -171,7 +207,7 @@ export function StudioCanvas() {
       }
     }
 
-    for (const node of nodes) {
+    for (const node of renderable) {
       const existing = objects.get(node.id);
       if (existing === undefined) {
         const created = buildFabricObject(node);
@@ -188,11 +224,15 @@ export function StudioCanvas() {
     // Array order is z-order; the artboard stays at the bottom.
     const artboardRect = artboardRef.current;
     if (artboardRect !== null) canvas.moveObjectTo(artboardRect, 0);
-    nodes.forEach((node, index) => {
+    renderable.forEach((node, index) => {
       const object = objects.get(node.id);
       if (object !== undefined) canvas.moveObjectTo(object, index + 1);
     });
 
+    // Exposed for browser tests: asserts what Fabric actually holds, rather
+    // than what the layers tree claims. DEF-1 slipped through precisely
+    // because only the tree was checked.
+    setRenderedCount(objects.size);
     canvas.requestRenderAll();
   }, [nodes]);
 
@@ -201,7 +241,7 @@ export function StudioCanvas() {
     const canvas = canvasRef.current;
     if (canvas === null) return;
 
-    const wanted = selection
+    const wanted = selectedLeafIds(useCanvasStore.getState().nodes, selection)
       .map((id) => objectsRef.current.get(id))
       .filter((object): object is fabric.FabricObject => object !== undefined);
 
@@ -336,6 +376,7 @@ export function StudioCanvas() {
     <div
       ref={containerRef}
       data-testid="canvas-viewport"
+      data-fabric-objects={renderedCount}
       className="relative h-full w-full overflow-hidden bg-pasteboard"
     >
       <canvas ref={canvasElementRef} />

@@ -154,6 +154,43 @@ test('a tool shortcut does not fire while typing in a field', async ({ page }) =
   await expect(page.getByTestId('tool-select')).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('grouping keeps both objects on the canvas — DEF-1 regression', async ({ page }) => {
+  // The original P3 test only checked the layers tree, so it passed while
+  // grouped children were being dropped from the canvas entirely.
+  await ready(page);
+  const viewport = page.getByTestId('canvas-viewport');
+
+  await place(page, 'rect', { x: -40, y: -20 });
+  await place(page, 'ellipse', { x: 40, y: 20 });
+  await expect(viewport).toHaveAttribute('data-fabric-objects', '2');
+
+  const items = page.getByRole('treeitem');
+  await items.nth(0).getByRole('button').click();
+  await items
+    .nth(1)
+    .getByRole('button')
+    .click({ modifiers: ['Shift'] });
+  await page.getByTestId('group').click();
+
+  // Still two drawable objects; the group itself draws nothing.
+  await expect(viewport).toHaveAttribute('data-fabric-objects', '2');
+
+  await page.getByRole('button', { name: 'Ungroup' }).click();
+  await expect(viewport).toHaveAttribute('data-fabric-objects', '2');
+});
+
+test('placing objects adds them to the Fabric canvas, not just the tree', async ({ page }) => {
+  await ready(page);
+  const viewport = page.getByTestId('canvas-viewport');
+  await expect(viewport).toHaveAttribute('data-fabric-objects', '0');
+
+  await place(page, 'rect');
+  await expect(viewport).toHaveAttribute('data-fabric-objects', '1');
+
+  await page.getByTestId('undo').click();
+  await expect(viewport).toHaveAttribute('data-fabric-objects', '0');
+});
+
 test('grouping two objects nests them in the tree', async ({ page }) => {
   await ready(page);
   await place(page, 'rect', { x: -40, y: -20 });

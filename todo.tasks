@@ -1,0 +1,268 @@
+# toke — outstanding work register
+
+Everything deliberately deferred, left incomplete against a plan acceptance
+criterion, or claimed-but-unverified during Phases 0–3.
+
+Maintained alongside [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The plan
+says what the phases are; this file says what they did not deliver. Add an
+entry the moment something is skipped — a deferral that lives only in a commit
+message is a deferral nobody will find.
+
+Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
+
+Last audited: 2026-09-21, after Phase 3.
+
+---
+
+## 1. Defects — introduced, not deferred
+
+### DEF-1 · Grouped objects disappear from the canvas · DONE · 2026-09-21
+`groupSelection` moves children into the group node, so they leave the
+top-level array. `StudioCanvas.buildFabricObject` returns `null` for
+`kind: 'group'`, and the render loop only walks top-level nodes — so the
+children are never drawn.
+
+The P3 e2e asserted the layers **tree** showed three items after grouping and
+never checked the canvas, which is exactly how this got through.
+
+**Fixed:** `renderableNodes` flattens groups to leaves in paint order — groups
+hold absolute coordinates, so no transform stack is needed. Selecting a group
+now selects every leaf inside it.
+
+The viewport exposes `data-fabric-objects`, so browser tests can assert what
+Fabric actually holds rather than what the tree claims. Two regression tests
+cover place/undo and group/ungroup.
+
+### DEF-2 · Canvas text edits may not reach the store · OPEN · medium
+Double-clicking an `IText` enters Fabric's editor. `commitFromFabric` reads
+`object.text` on `object:modified`, but Fabric emits `text:changed` and
+`editing:exited` for text edits and it is unverified that `object:modified`
+fires at all.
+
+- **Accept:** double-click a text object, type, click away; the new string
+  survives an undo/redo round trip and appears in the layers tree.
+
+---
+
+## 2. Blocked on a later phase
+
+### BLK-1 · Image tool · BLOCKED by P4.1 · from P3.4
+`SceneNode.image` carries an `assetId` into the asset store. CLAUDE.md forbids
+data URIs on scene nodes, so there is nowhere legitimate to put the bytes
+until the store exists.
+
+- **Accept:** upload an image, place it, resize it; the asset survives a
+  `.toke` save/open round trip; two placements of the same file store one blob.
+
+### BLK-2 · Pen / path tool · BLOCKED by P8.2 · from P3.4
+`PathNode` and the Fabric mapping exist; the drawing interaction does not.
+Large interaction (anchors, bezier handles), and there is no PDF path renderer
+to target until P8.2, so it cannot be verified end to end.
+
+### BLK-3 · Token-bound indicator in the layers tree · BLOCKED by P6.6
+`LayersPanel` hardcodes `const bound = false`. Replace with real binding state
+once tokens exist, and render the `--bound` colour **plus** a text label —
+CLAUDE.md §4.7 forbids signalling state by colour alone.
+
+### BLK-4 · Diagnostics panel wiring · BLOCKED by P9.2 · from P2.1, P3
+Errors currently surface as one-off `role="alert"` paragraphs. Every
+`AppError` already carries `objectId`; nothing consumes it yet.
+
+- **Accept:** every error reaches the diagnostics panel, and clicking one with
+  an `objectId` selects that canvas object.
+
+---
+
+## 3. Incomplete against a plan acceptance criterion
+
+These were signed off as phase-complete with parts missing. Each names the
+criterion it fails.
+
+### INC-1 · Rulers · OPEN · P3.3
+> "Rulers in the active display unit with a live cursor indicator. Ruler ticks
+> stay legible from 10% to 1600% (adaptive subdivision)."
+
+`CanvasRulers.tsx` was never written. Zoom, pan and fit all work; the rulers do
+not exist.
+
+### INC-2 · Guides cannot be created · OPEN · P3.7
+The snapping engine is complete and tested, `guides` lives in the store and
+`addGuide` exists — but nothing calls it. There is no drag-from-ruler
+interaction (blocked by INC-1) and no guide rendering.
+
+Also missing from the same criterion:
+- **Snap indicators** — `snap()` returns `matches`; nothing draws them.
+- **Ctrl suspends snapping** — only the toolbar checkbox toggles it.
+
+### INC-3 · Pan by space-drag and middle-drag · OPEN · P3.3
+> "space-drag and middle-drag pan"
+
+Only wheel/trackpad pan is implemented.
+
+### INC-4 · Layers panel is read-only · OPEN · P3.10
+> "Reorder by drag, rename, toggle visibility/lock, select."
+
+Only **select** is implemented. `visible` and `locked` exist on every node and
+are honoured by the Fabric mapping, but there is no UI to change them.
+
+### INC-5 · Data grid: column resize · OPEN · P2.6
+> "Sort, column resize, inline cell edit, row add/delete."
+
+Columns are fixed at 150px. Long values truncate with no way to widen.
+
+### INC-6 · Data grid: no "add row" control · OPEN · P2.6
+`useDataStore.addRow` exists and works. The button was on the old single-panel
+page and was dropped when the studio shell replaced it in P3. Row deletion
+survives only as Shift+Delete, which is undiscoverable.
+
+### INC-7 · CSV column mapping is not editable · OPEN · P2.7
+> "column mapping UI (source → target, or 'create column', or 'ignore') →
+> type confirmation → import with progress"
+> "Mapping is fully keyboard-operable. Inferred types are shown and
+> overridable."
+
+`proposeMapping` output is **displayed** in the preview header but cannot be
+changed. A user whose CSV column is matched wrongly has no recourse but to
+edit the file. Missing:
+- per-column target selector (map / create / ignore)
+- per-column type override
+- import progress indicator
+
+### INC-8 · Record source has no UI · OPEN · P2.5
+`runRecordSource` and `columnSchemaFor` are built and tested but are called
+from nowhere. Needed before P6 can bind anything.
+
+### INC-9 · Align and distribute have no keyboard shortcuts · OPEN · P3.8
+Toolbar buttons only. CLAUDE.md §4.7 commits to full keyboard operation.
+
+### INC-10 · Nudge is not coalesced in history · OPEN · P3.9
+> "A drag is one entry, not one per mousemove."
+
+Fabric emits `object:modified` once per drag, so **drags are fine**. Held
+arrow keys are not: each keypress pushes its own history entry, so nudging an
+object ten steps costs ten undos. `coalesceKey` is implemented and tested in
+the history module but no call site passes one.
+
+- **Fix:** pass a `coalesceKey` such as `nudge:<selection-ids>` from
+  `useCanvasStore.nudge`.
+
+---
+
+## 4. Claimed but never verified
+
+Acceptance criteria that were written into the plan and not actually
+exercised. Each needs a test, not an opinion.
+
+### VER-1 · Canvas mount/unmount leak · OPEN · P3.2
+> "Mount/unmount 50 times without leaking listeners or canvases (assert
+> listener count)."
+
+Never run. React StrictMode double-mounts in dev, so a leak here is likely
+already happening unnoticed.
+
+### VER-2 · Data grid at 10,000 rows · OPEN · P2.6
+> "10,000 rows scroll at 60fps."
+
+Virtualisation is wired via `@tanstack/react-virtual` but was only ever
+exercised with three rows.
+
+### VER-3 · Multi-select resize origin · OPEN · P3.5
+> "Multi-select resize scales all members proportionally about the correct
+> origin."
+
+Delegated entirely to Fabric's `ActiveSelection`; never asserted.
+
+### VER-4 · Marquee selection · OPEN · P3.5
+Fabric's default drag-select is enabled but untested.
+
+### VER-5 · Numeric fields during a live drag · OPEN · P3.6
+> "Values update live during canvas drag without fighting user input
+> mid-edit."
+
+Fields update on `object:modified` (drag end), not during the drag. The
+"without fighting input" half is satisfied; the "live" half is not.
+
+---
+
+## 5. Environment and infrastructure
+
+### ENV-1 · No git remote · OPEN · **blocks CI**
+`.github/workflows/ci.yml` has never executed. The workflow is valid YAML with
+2 jobs and 17 steps, but validity is not the same as passing.
+
+- Needed: `git remote add origin …`, push `main` and `staging`, confirm the
+  first run is green.
+- Until then every "all gates pass" claim rests on local runs only.
+
+### ENV-2 · Vercel CLI not installed · OPEN
+`npm i -g vercel` then `vercel login && vercel link`. README.md and
+DEVELOPMENT.md both document `npm run env:pull`, which cannot work yet.
+
+### ENV-3 · MCP servers unavailable · OPEN
+- `vercel` and `supabase` need OAuth, which cannot run in a non-interactive
+  session — authorise via claude.ai connector settings or `/mcp`.
+- `github` fails with "Authorization header is badly formatted" — a
+  connection fault, not a missing capability.
+
+### ENV-4 · Git identity may misattribute commits · OPEN · low
+Commits are authored as `jacob.frusher@cil-uk.co.uk`, which differs from the
+account email on this session. If GitHub uses the other address the history
+will not attribute. Cheap to fix now, annoying later.
+
+### ENV-5 · Branch protection not configured · OPEN
+DEVELOPMENT.md §5.6 specifies protecting `main` and `staging`. Until set, the
+branching model is a convention rather than a rule.
+
+### ENV-6 · Caveman statusline badge · OPEN · cosmetic
+Plugin ships a statusline showing the active mode; not wired into
+`~/.claude/settings.json`.
+
+---
+
+## 6. Scope and documentation drift
+
+### DOC-1 · `/dev/theme` ships to production · OPEN · low
+The design-system reference page is a real route in the production bundle.
+Either gate it behind `NEXT_PUBLIC_VERCEL_ENV !== 'production'` or accept it
+deliberately and say so in CLAUDE.md.
+
+### DOC-2 · CLAUDE.md §2.2 directory map is aspirational · OPEN
+It lists components that do not exist: `CanvasRulers`, `Guides`,
+`RecordSourcePanel`, `SqlConsole`, `InspectorPanel`, `TypographyPanel`,
+`AppShell`, `CycleBar`, and the whole `components/preview/` and
+`components/imposition/` trees. Fine as a target, misleading as a map — mark
+which parts are built.
+
+### DOC-3 · `components/ui/` is not "retuned Shadcn" · OPEN · low
+CLAUDE.md §4.5 describes retuning Shadcn primitives. No Shadcn is installed:
+`Button` and `Modal` are hand-written, and the dialog uses native `<dialog>`.
+That was a deliberate call recorded in §7, but §4.5 still reads as though a
+component library is in use.
+
+### DOC-4 · Unused `fixtures/` images · OPEN · low
+Ten images committed in `f48735b`. Nothing references them. Confirm whether
+they are for P9.4 templates or P4.1 asset-store tests, or drop them.
+
+### DOC-5 · `useDataStore` re-exports `isOk` · OPEN · trivial
+A leftover convenience export from a store module. Import from `@/lib/result`
+and remove.
+
+---
+
+## 7. Known and accepted — no action
+
+Recorded so they are not rediscovered as problems.
+
+- **`pdf-lib` is unmaintained** (1.17.1, ~4 years old). Deliberate: used as a
+  low-level writer under our own renderer. CLAUDE.md §7.
+- **No `@tanstack/react-table`.** Dropped after building the grid; runtime
+  schema introspection plus sort earned nothing from a headless table model.
+- **Native `<dialog>` over a modal library.** `showModal()` already provides
+  focus trap, Escape, `aria-modal` and inert background.
+- **Next auto-appends a block to CLAUDE.md** on `next dev`. Committed
+  deliberately; removing it only recreates the diff.
+- **`ink-disabled` fails AA contrast on purpose** (2.93:1). WCAG exempts
+  disabled controls, and the contrast test asserts it stays below threshold so
+  nobody "fixes" it into looking enabled.
+- **RGB PDF output, not CMYK.** No ICC embedding is achievable client-side.
+  CLAUDE.md §9.
