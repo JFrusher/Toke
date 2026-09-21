@@ -13,6 +13,13 @@ const GUESTS = [
   'Jean,Bartik,Declined,0',
 ].join('\n');
 
+/** The data panel is collapsed by default in the studio shell. */
+async function openGrid(page: import('@playwright/test').Page) {
+  await page.goto('/');
+  await page.getByTestId('toggle-data').click();
+  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+}
+
 async function upload(page: import('@playwright/test').Page, csv: string, name = 'guests.csv') {
   await page.getByTestId('open-import').click();
   await page.getByTestId('csv-file').setInputFiles({
@@ -23,14 +30,12 @@ async function upload(page: import('@playwright/test').Page, csv: string, name =
 }
 
 test('boots the database worker and shows an empty grid', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
   await expect(page.getByRole('columnheader', { name: /first_name/ })).toBeVisible();
 });
 
 test('imports a CSV and renders the rows', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await upload(page, GUESTS);
   await expect(page.getByTestId('csv-summary')).toContainText('3');
@@ -42,8 +47,7 @@ test('imports a CSV and renders the rows', async ({ page }) => {
 });
 
 test('reports a malformed CSV instead of importing it', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await upload(page, 'name,name\na,b', 'duplicate.csv');
 
@@ -52,8 +56,7 @@ test('reports a malformed CSV instead of importing it', async ({ page }) => {
 });
 
 test('warns about ragged rows but still allows import', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await upload(page, 'first_name,last_name\nAda,Lovelace\nGrace', 'ragged.csv');
 
@@ -64,8 +67,7 @@ test('warns about ragged rows but still allows import', async ({ page }) => {
 });
 
 test('sorts by a column header', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await upload(page, GUESTS);
   await page.getByTestId('csv-confirm').click();
@@ -79,8 +81,7 @@ test('sorts by a column header', async ({ page }) => {
 });
 
 test('edits a cell with the keyboard and persists it', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await upload(page, GUESTS);
   await page.getByTestId('csv-confirm').click();
@@ -103,8 +104,7 @@ test('edits a cell with the keyboard and persists it', async ({ page }) => {
 });
 
 test('Escape abandons an edit without writing it', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await upload(page, GUESTS);
   await page.getByTestId('csv-confirm').click();
@@ -121,8 +121,7 @@ test('Escape abandons an edit without writing it', async ({ page }) => {
 });
 
 test('the dialog closes on Escape', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
+  await openGrid(page);
 
   await page.getByTestId('open-import').click();
   await expect(page.getByTestId('csv-file')).toBeVisible();

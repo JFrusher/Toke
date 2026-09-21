@@ -44,7 +44,6 @@ export type FabricProps = {
   paintFirst?: 'fill' | 'stroke';
   rx?: number;
   ry?: number;
-  path?: string;
   text?: string;
   fontFamily?: string;
   fontSize?: number;
@@ -138,10 +137,12 @@ export function toFabricProps(node: SceneNode): FabricProps {
       return { ...shared, ...STROKE_GEOMETRY, fill: null, ...strokeProps(node.stroke) };
 
     case 'path':
+      // `d` is NOT emitted here: fabric.Path takes the path data as its first
+      // constructor argument, and a `path` key would collide with Fabric's
+      // own typing of that property on both Path and IText.
       return {
         ...shared,
         ...STROKE_GEOMETRY,
-        path: node.d,
         fill: fillValue(node.fill),
         ...strokeProps(node.stroke),
       };
