@@ -58,6 +58,43 @@ describe('sql.js containment', () => {
   });
 });
 
+describe('single text-measurement path', () => {
+  // CLAUDE.md §2.1 rule 3. Canvas auto-fit and PDF layout must measure through
+  // engine/text/measure.ts and nothing else. Two measurement sources disagree
+  // by a fraction of a point — invisible on screen, and enough to put text
+  // outside the trim on every card in a run.
+  const ALLOWED = new Set([
+    // The agreement harness compares the browser against fontkit; measuring
+    // both sides is its entire purpose.
+    'app/dev/measure/page.tsx',
+  ]);
+
+  it('ctx.measureText appears only in the agreement harness', () => {
+    const offenders = FILES.filter(
+      ({ path, source }) => !ALLOWED.has(path) && /\.measureText\s*\(/.test(source),
+    ).map(({ path }) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('measureText is exported from exactly one module', () => {
+    const exporters = FILES.filter(
+      ({ path, source }) =>
+        !path.includes('.test.') && /export\s+function\s+measureText/.test(source),
+    ).map(({ path }) => path);
+
+    expect(exporters).toEqual(['engine/text/measure.ts']);
+  });
+
+  it('fontkit is imported only by the text engine and the harness', () => {
+    const importers = FILES.filter(
+      ({ path, source }) => !path.includes('.test.') && /from\s+['"]fontkit['"]/.test(source),
+    ).map(({ path }) => path);
+
+    expect(importers).toEqual(['engine/text/fontLoader.ts']);
+  });
+});
+
 describe('worker boundary', () => {
   it('round trips every request shape through structuredClone', () => {
     // Behavioural, not textual. A non-cloneable value in the protocol fails at

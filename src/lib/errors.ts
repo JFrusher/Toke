@@ -7,6 +7,7 @@
  */
 
 export type ErrorCode =
+  | 'FONT_UNREADABLE'
   | 'AUTOSAVE_FAILED'
   | 'RECOVERY_EMPTY'
   | 'ASSET_INVALID'

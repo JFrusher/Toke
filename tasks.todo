@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-21, after Phase 4.
+Last audited: 2026-09-21, after Phase 5.
 
 ---
 
@@ -170,6 +170,22 @@ No UI to add, rename or switch designs.
 Recovery works. The lock does not exist: two tabs open on the same project
 both autosave, and the last write wins silently.
 
+### INC-15 · Only the bundled Plex faces load · OPEN · P5.1
+`ensureFontsLoaded` fetches three hardcoded faces from `/fonts`. There is no
+user font upload, no font picker, and `loadFont`'s TTF/OTF path is only
+exercised by the WOFF fixture. The loader supports it; nothing calls it.
+
+### INC-16 · Bundled fonts are WOFF, not TTF/OTF · OPEN · P8.6
+@fontsource ships WOFF. fontkit measures it correctly, which is all Phase 5
+needs, but **WOFF cannot be embedded in a PDF** — it is a web container
+format. P8.6 needs TTF or OTF bytes for the same faces, and the measured font
+and the embedded font must be the same file or the P5.3 guarantee is void.
+
+### INC-17 · No text shaping · OPEN · accepted for v1
+`measureText` sums advance widths from `font.layout()`. That covers Latin with
+kerning, which CLAUDE.md §8 scopes v1 to. Ligatures, contextual alternates and
+any complex script will measure and render incorrectly.
+
 ---
 
 ## 4. Claimed but never verified
@@ -198,6 +214,10 @@ Delegated entirely to Fabric's `ActiveSelection`; never asserted.
 
 ### VER-4 · Marquee selection · OPEN · P3.5
 Fabric's default drag-select is enabled but untested.
+
+### VER-7 · Measurement agreement on a non-bundled font · OPEN · P5.3
+The 0.5pt agreement is proved for three Plex faces. A user-supplied TTF has
+never been checked, and that is the case most likely to diverge.
 
 ### VER-6 · Autosave under a real storage quota · OPEN · P4.4
 `onError` is tested with a thrown error, but a genuine `QuotaExceededError`

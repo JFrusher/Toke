@@ -7,6 +7,8 @@ import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
 import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { MAX_ZOOM, MIN_ZOOM, type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
+import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
+import { measureText } from '@/engine/text/measure';
 import { points } from '@/engine/units/types';
 
 /**
@@ -60,7 +62,44 @@ function selectedLeafIds(nodes: readonly SceneNode[], selection: readonly NodeId
   return ids;
 }
 
-function buildFabricObject(node: SceneNode): fabric.FabricObject | null {
+/**
+ * Size a text node from engine/text/measure.ts rather than letting Fabric
+ * measure it (CLAUDE.md §2.1 rule 3).
+ *
+ * Fabric would size the box with ctx.measureText. That happens to agree today
+ * — the browser and fontkit read the same file — but "happens to agree" is
+ * not a guarantee. Driving the box from our own measurement makes the canvas
+ * and the PDF the same number by construction, not by coincidence.
+ *
+ * Returns null when the face has not loaded yet; Fabric's own size stands in
+ * until the fonts arrive and the effect re-runs.
+ */
+function measuredTextBox(node: SceneNode): { width: number; height: number } | null {
+  if (node.kind !== 'text') return null;
+
+  const font = getFont(node.fontFamily, node.fontWeight, node.italic);
+  if (font === null) return null;
+
+  const measured = measureText({
+    text: node.text,
+    font,
+    fontSize: node.fontSize,
+    tracking: node.tracking,
+    lineHeight: node.lineHeight,
+  });
+
+  return { width: measured.width, height: measured.height };
+}
+
+/** Returns the node resized to its measured text box, or unchanged if the
+ *  face has not loaded. */
+export function withMeasuredSize(node: SceneNode): SceneNode {
+  const box = measuredTextBox(node);
+  if (box === null) return node;
+  return { ...node, width: points(box.width), height: points(box.height) };
+}
+
+function buildFabricObject(node: SceneNode, fontsReady: boolean): fabric.FabricObject | null {
   const props = toFabricProps(node);
 
   switch (node.kind) {
@@ -74,8 +113,12 @@ function buildFabricObject(node: SceneNode): fabric.FabricObject | null {
       return new fabric.Line([0, 0, node.width, node.height], props);
     case 'path':
       return new fabric.Path(node.d, props);
-    case 'text':
-      return new fabric.IText(node.text, props);
+    case 'text': {
+      const text = new fabric.IText(node.text, props);
+      const box = fontsReady ? measuredTextBox(node) : null;
+      if (box !== null) text.set({ width: box.width, height: box.height });
+      return text;
+    }
     case 'image':
     case 'group':
       // Images need the asset store (P4.1) and groups are a store-level
@@ -94,6 +137,7 @@ export function StudioCanvas() {
    *  does not immediately overwrite what the user is dragging. */
   const fromFabric = useRef(false);
   const [renderedCount, setRenderedCount] = useState(0);
+  const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
   const selection = useCanvasStore((s) => s.selection);
@@ -108,7 +152,7 @@ export function StudioCanvas() {
     const updated = store.nodes.map((node) => {
       const object = objectsRef.current.get(node.id);
       if (object === undefined) return node;
-      return fromFabricObject(
+      const updated = fromFabricObject(
         {
           left: object.left,
           top: object.top,
@@ -123,6 +167,12 @@ export function StudioCanvas() {
         },
         node,
       );
+
+      // A text edit changes the string, so the box must be remeasured — the
+      // width Fabric reports is its own, and the node must carry ours.
+      const textChanged =
+        updated.kind === 'text' && node.kind === 'text' && updated.text !== node.text;
+      return textChanged ? withMeasuredSize(updated) : updated;
     });
 
     fromFabric.current = true;
@@ -181,6 +231,17 @@ export function StudioCanvas() {
     };
   }, [artboard.width, artboard.height]);
 
+  // ---- fonts -------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    void ensureFontsLoaded().then(() => {
+      if (!cancelled) setFontsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ---- viewport ----------------------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -210,13 +271,18 @@ export function StudioCanvas() {
     for (const node of renderable) {
       const existing = objects.get(node.id);
       if (existing === undefined) {
-        const created = buildFabricObject(node);
+        const created = buildFabricObject(node, fontsReady);
         if (created === null) continue;
         created.set({ nodeId: node.id } as Partial<fabric.FabricObject>);
         objects.set(node.id, created);
         canvas.add(created);
       } else {
         existing.set(toFabricProps(node));
+        // Guarded on fontsReady so the intent is explicit: before the face
+        // loads there is nothing to measure against, and once it lands this
+        // effect re-runs and resizes every text box.
+        const box = fontsReady ? measuredTextBox(node) : null;
+        if (box !== null) existing.set({ width: box.width, height: box.height });
         existing.setCoords();
       }
     }
@@ -234,7 +300,7 @@ export function StudioCanvas() {
     // because only the tree was checked.
     setRenderedCount(objects.size);
     canvas.requestRenderAll();
-  }, [nodes]);
+  }, [nodes, fontsReady]);
 
   // ---- selection: store → fabric ----------------------------------------
   useEffect(() => {
@@ -377,6 +443,7 @@ export function StudioCanvas() {
       ref={containerRef}
       data-testid="canvas-viewport"
       data-fabric-objects={renderedCount}
+      data-fonts-ready={fontsReady}
       className="relative h-full w-full overflow-hidden bg-pasteboard"
     >
       <canvas ref={canvasElementRef} />
@@ -407,8 +474,8 @@ function placeNode(tool: Tool, x: ReturnType<typeof points>, y: ReturnType<typeo
       });
     case 'line':
       return lineNode({ id: makeId('line'), x, y, width: points(120), height: points(0) });
-    case 'text':
-      return textNode({
+    case 'text': {
+      const node = textNode({
         id: makeId('text'),
         x,
         y,
@@ -417,6 +484,11 @@ function placeNode(tool: Tool, x: ReturnType<typeof points>, y: ReturnType<typeo
         text: 'Text',
         fontSize: points(18),
       });
+      // The NODE carries the measured size, not just the Fabric object. The
+      // scene graph is what the PDF renderer reads and what the inspector
+      // shows; sizing only the canvas object would leave both wrong.
+      return withMeasuredSize(node);
+    }
     case 'select':
       return null;
   }
