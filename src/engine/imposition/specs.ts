@@ -9,7 +9,7 @@ import { err, ok, type Result } from '@/lib/result';
  */
 
 export type Orientation = 'portrait' | 'landscape';
-export type SheetPresetId = 'a4' | 'a3' | 'letter' | 'tabloid';
+export type SheetPresetId = 'a4' | 'a3' | 'a2' | 'letter' | 'tabloid';
 
 export type SheetSpec = {
   readonly id: SheetPresetId | 'custom';
@@ -26,12 +26,13 @@ const inch = (value: number): Points => inchesToPoints(inches(value));
 const PRESET_DIMENSIONS: Record<SheetPresetId, { label: string; width: Points; height: Points }> = {
   a4: { label: 'A4 · 210 × 297mm', width: mm(210), height: mm(297) },
   a3: { label: 'A3 · 297 × 420mm', width: mm(297), height: mm(420) },
+  a2: { label: 'A2 · 420 × 594mm', width: mm(420), height: mm(594) },
   letter: { label: 'US Letter · 8.5 × 11in', width: inch(8.5), height: inch(11) },
   tabloid: { label: 'US Tabloid · 11 × 17in', width: inch(11), height: inch(17) },
 };
 
 export const SHEET_PRESETS: readonly { id: SheetPresetId; label: string }[] = (
-  ['a4', 'a3', 'letter', 'tabloid'] as const
+  ['a4', 'a3', 'a2', 'letter', 'tabloid'] as const
 ).map((id) => ({ id, label: PRESET_DIMENSIONS[id].label }));
 
 export function sheetPreset(id: SheetPresetId, orientation: Orientation): SheetSpec {

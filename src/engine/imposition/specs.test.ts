@@ -39,6 +39,12 @@ describe('sheet presets', () => {
     expect(sheet.height).toBe(1224);
   });
 
+  it('A2 portrait is 420 x 594mm', () => {
+    const sheet = sheetPreset('a2', 'portrait');
+    expect(sheet.width).toBeCloseTo(1190.551, 3);
+    expect(sheet.height).toBeCloseTo(1683.78, 2);
+  });
+
   it('landscape swaps the axes', () => {
     const portrait = sheetPreset('a4', 'portrait');
     const landscape = sheetPreset('a4', 'landscape');
@@ -47,7 +53,7 @@ describe('sheet presets', () => {
   });
 
   it('exposes every preset with a human label', () => {
-    expect(SHEET_PRESETS.map((s) => s.id)).toEqual(['a4', 'a3', 'letter', 'tabloid']);
+    expect(SHEET_PRESETS.map((s) => s.id)).toEqual(['a4', 'a3', 'a2', 'letter', 'tabloid']);
     for (const preset of SHEET_PRESETS) {
       expect(preset.label.length).toBeGreaterThan(0);
     }
