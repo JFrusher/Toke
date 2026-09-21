@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-21, after Phase 3.
+Last audited: 2026-09-21, after Phase 4.
 
 ---
 
@@ -46,10 +46,12 @@ fires at all.
 
 ## 2. Blocked on a later phase
 
-### BLK-1 · Image tool · BLOCKED by P4.1 · from P3.4
-`SceneNode.image` carries an `assetId` into the asset store. CLAUDE.md forbids
-data URIs on scene nodes, so there is nowhere legitimate to put the bytes
-until the store exists.
+### BLK-1 · Image tool · OPEN (unblocked) · from P3.4
+**Unblocked by P4.1** — the asset store now exists and is content-addressed.
+Still needs: a file input on the toolbar, `FabricImage` construction from
+`objectUrlFor`, retain/release wired to node add/delete, and asset bytes
+collected into `packProject` (currently hardcoded to an empty array in
+`FileMenu.buildBytes`).
 
 - **Accept:** upload an image, place it, resize it; the asset survives a
   `.toke` save/open round trip; two placements of the same file store one blob.
@@ -146,6 +148,28 @@ the history module but no call site passes one.
 - **Fix:** pass a `coalesceKey` such as `nudge:<selection-ids>` from
   `useCanvasStore.nudge`.
 
+### INC-11 · Assets and fonts are not collected into a save · OPEN · P4.2
+`FileMenu.buildBytes` passes `assets: []` and `fonts: []`. The `.toke` format
+carries both and the round trip is tested at the format level, but the app
+never populates them. Blocks BLK-1 from being genuinely complete.
+
+### INC-12 · Save always downloads a new file · OPEN · P4.3
+No File System Access API, so "Save" cannot overwrite the file the user
+opened — every save produces another download. Deliberate: FSA is
+Chromium-only and cannot be driven from a test. Revisit if repeated saving
+becomes annoying in practice.
+
+### INC-13 · Multi-design projects cannot be created or switched · OPEN · P4.2
+The format stores `designs` as an array and round-trips several, but
+`toProject` always writes exactly one and `fromProject` reads only the first.
+No UI to add, rename or switch designs.
+
+### INC-14 · No BroadcastChannel single-writer lock · OPEN · P4.4
+> "BroadcastChannel single-writer lock, crash-recovery prompt."
+
+Recovery works. The lock does not exist: two tabs open on the same project
+both autosave, and the last write wins silently.
+
 ---
 
 ## 4. Claimed but never verified
@@ -174,6 +198,11 @@ Delegated entirely to Fabric's `ActiveSelection`; never asserted.
 
 ### VER-4 · Marquee selection · OPEN · P3.5
 Fabric's default drag-select is enabled but untested.
+
+### VER-6 · Autosave under a real storage quota · OPEN · P4.4
+`onError` is tested with a thrown error, but a genuine `QuotaExceededError`
+from a large project has never been produced. Worth a test that fills the
+store.
 
 ### VER-5 · Numeric fields during a live drag · OPEN · P3.6
 > "Values update live during canvas drag without fighting user input

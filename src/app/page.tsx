@@ -7,6 +7,7 @@ import { LayersPanel } from '@/components/canvas/LayersPanel';
 import { CsvImportDialog } from '@/components/data/CsvImportDialog';
 import { DataGrid } from '@/components/data/DataGrid';
 import { TransformFields } from '@/components/inspector/TransformFields';
+import { FileMenu } from '@/components/shell/FileMenu';
 import { Button } from '@/components/ui/Button';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
@@ -102,9 +103,9 @@ export default function StudioPage() {
 
   return (
     <main className="flex h-dvh flex-col bg-panel">
-      <header className="flex shrink-0 items-center gap-3 border-hairline-strong border-b px-3 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-hairline-strong border-b px-3 py-2">
         <h1 className="font-semibold text-[13px] tracking-tight">toke</h1>
-        <span className="font-mono text-[11px] text-ink-muted">Place card · 85 × 55mm</span>
+        <FileMenu />
 
         <div className="ml-auto flex items-center gap-1.5">
           <Button onClick={() => setShowData((open) => !open)} data-testid="toggle-data">

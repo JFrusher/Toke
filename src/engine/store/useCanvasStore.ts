@@ -76,6 +76,7 @@ type CanvasState = Document & {
   undo: () => void;
   redo: () => void;
   reset: () => void;
+  loadScene: (nodes: readonly SceneNode[], artboard: Rect) => void;
 };
 
 export const MIN_ZOOM = 0.1;
@@ -299,6 +300,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     reset() {
       history = createHistory(EMPTY);
       set({ ...EMPTY, canUndo: false, canRedo: false });
+    },
+
+    loadScene(nodes, artboard) {
+      // History starts fresh: an opened project has no past in this session,
+      // and letting undo reach back past the load would leave the editor
+      // showing a scene the file never contained.
+      history = createHistory<Document>({ nodes, selection: [] });
+      set({ nodes, selection: [], artboard, canUndo: false, canRedo: false });
     },
   };
 });

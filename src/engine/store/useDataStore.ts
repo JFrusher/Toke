@@ -37,6 +37,8 @@ type DataState = {
   updateCell: (id: number, column: string, value: SqlValue) => Promise<void>;
   addRow: () => Promise<void>;
   deleteRow: (id: number) => Promise<void>;
+  exportDatabase: () => Promise<Uint8Array>;
+  loadDatabase: (bytes: Uint8Array) => Promise<void>;
 };
 
 function quote(name: string): string {
@@ -161,6 +163,33 @@ export const useDataStore = create<DataState>((set, get) => ({
       set({ error: result.error });
       return;
     }
+    await get().refresh();
+  },
+
+  async exportDatabase() {
+    const result = await ensureClient().export();
+    if (isErr(result)) {
+      set({ error: result.error });
+      return new Uint8Array();
+    }
+    return result.value;
+  },
+
+  async loadDatabase(bytes) {
+    const db = ensureClient();
+    const started = await db.init(bytes);
+    if (isErr(started)) {
+      set({ status: 'error', error: started.error });
+      return;
+    }
+    // Migrate after load: a project saved by an older build may predate the
+    // current schema.
+    const migrated = await db.migrate();
+    if (isErr(migrated)) {
+      set({ status: 'error', error: migrated.error });
+      return;
+    }
+    set({ status: 'ready', error: null });
     await get().refresh();
   },
 

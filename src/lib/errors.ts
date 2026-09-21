@@ -7,6 +7,8 @@
  */
 
 export type ErrorCode =
+  | 'AUTOSAVE_FAILED'
+  | 'RECOVERY_EMPTY'
   | 'ASSET_INVALID'
   | 'ASSET_NOT_FOUND'
   | 'TOKE_CORRUPT'
