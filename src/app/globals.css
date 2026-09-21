@@ -1,11 +1,104 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-/* Placeholder base. The real palette, type scale and density system land in
-   P0.5 (see IMPLEMENTATION_PLAN.md). Kept deliberately minimal so P0.1's
-   "blank page, no boilerplate" acceptance criterion is unambiguous.
+/* ============================================================================
+   toke — theme layer
+   ----------------------------------------------------------------------------
+   Single source of truth for the palette. The contrast audit (P0.6) parses
+   THIS FILE rather than a parallel TypeScript copy, so the values under test
+   are the values that ship.
 
-   Note: there is no `prefers-color-scheme: dark` block, and there will not be
-   one. toke is light-only by design — CLAUDE.md §4.1. */
+   Paper-first, three tiers of value (CLAUDE.md §4.1). The pasteboard is
+   deliberately DARKER than both the panels and the artboard — that is the
+   prepress convention, and it is what keeps a white card legible against light
+   chrome. The artboard is the only pure white on screen.
+
+   There is no `prefers-color-scheme: dark` block, and there will not be one.
+   toke is light-only by design.
+   ========================================================================== */
+
+:root {
+  /* --- surfaces ------------------------------------------------------- */
+  --paper: #ffffff;
+  --pasteboard: #d8d2c6;
+  --panel: #faf8f4;
+  --panel-raised: #ffffff;
+
+  /* --- lines ---------------------------------------------------------- */
+  --hairline: #ded8cc;
+  --hairline-strong: #c7bfb0;
+  --border-control: #908a7f;
+
+  /* --- ink ------------------------------------------------------------ */
+  --ink: #1a1815;
+  --ink-muted: #6b6459;
+  --ink-subtle: #766f64;
+  --ink-disabled: #9a9182;
+
+  /* --- accent: STATE ONLY, never decoration --------------------------- */
+  --accent: #1f3a5f;
+  --accent-weak: #e6ebf2;
+
+  /* --- semantic: colour carries meaning (CLAUDE.md §4.2) -------------- */
+  --bound: #1f3a5f;
+  --overflow: #a6401f;
+  --conditional: #2f6b6b;
+  --ok: #3d6b4a;
+
+  /* --- geometry ------------------------------------------------------- */
+  /* Radii and the spacing base live in the @theme block below, not here:
+     Tailwind owns those namespaces and emits them to :root itself. Declaring
+     them in both places produces a self-referential var() and a 500 from the
+     CSS compiler. */
+  --control-height: 28px;
+  --control-height-compact: 24px;
+
+  /* --- motion --------------------------------------------------------- */
+  --duration: 120ms;
+  --easing: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-pasteboard: var(--pasteboard);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-border-control: var(--border-control);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-ink-disabled: var(--ink-disabled);
+
+  --color-accent: var(--accent);
+  --color-accent-weak: var(--accent-weak);
+
+  --color-bound: var(--bound);
+  --color-overflow: var(--overflow);
+  --color-conditional: var(--conditional);
+  --color-ok: var(--ok);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
+}
+
+/* Literal values, not `inline`, so Tailwind emits these as real custom
+   properties on :root — `var(--radius-control)` has to resolve for hand-written
+   CSS as well as for the generated `rounded-control` utility. */
+@theme {
+  /* 4px grid (CLAUDE.md §4.4). Tailwind derives its whole spacing scale from
+     this, so `p-2` is 8px and `gap-3` is 12px. */
+  --spacing: 4px;
+
+  --radius-control: 2px;
+  --radius-panel: 4px;
+}
+
+/* ============================================================================
+   base
+   ========================================================================== */
 
 html,
 body {
@@ -14,6 +107,42 @@ body {
 
 body {
   margin: 0;
-  background: #faf8f4;
-  color: #1a1815;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Measurements, coordinates and record counters. Proportional digits shift
+   width as they change, which makes a cycling record counter jitter and a
+   column of dimensions fail to align. */
+[data-numeric],
+input[type='number'] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* One visible focus treatment, everywhere, on the accent. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ============================================================================
+   motion — CLAUDE.md §4.6
+   Transitions are permitted on colour and opacity only. No transform
+   animation on hover; canvas manipulation is direct and never animates.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

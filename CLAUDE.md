@@ -212,19 +212,30 @@ what keeps a white card legible against light chrome.
 --pasteboard:       #D8D2C6;  /* infinite workspace behind the artboard */
 --panel:            #FAF8F4;  /* sidebars, header, bottom bar */
 --panel-raised:     #FFFFFF;  /* inputs, popovers, menus */
---hairline:         #DED8CC;
---hairline-strong:  #C7BFB0;
 
---ink:              #1A1815;  /* primary text */
---ink-muted:        #6B6459;  /* labels, secondary */
---ink-faint:        #9A9182;  /* placeholder, disabled */
+--hairline:         #DED8CC;  /* decorative dividers — contrast-exempt */
+--hairline-strong:  #C7BFB0;  /* emphasised dividers — still decorative */
+--border-control:   #908A7F;  /* input/control boundaries — 3.23:1, WCAG 1.4.11 */
 
---accent:           #1F3A5F;  /* deep ink-blue — STATE ONLY */
+--ink:              #1A1815;  /* primary text          16.70:1 on panel */
+--ink-muted:        #6B6459;  /* labels, secondary      5.51:1 */
+--ink-subtle:       #766F64;  /* placeholder            4.68:1 */
+--ink-disabled:     #9A9182;  /* disabled ONLY — exempt 2.93:1 */
+
+--accent:           #1F3A5F;  /* deep ink-blue — STATE ONLY  10.83:1 */
 --accent-weak:      #E6EBF2;
 ```
 
 Neutrals are **warm** (yellow-shifted), never blue-grey slate. Warm chrome makes the artboard read
 as paper; cool chrome makes it read as another panel.
+
+**Two distinctions that are load-bearing, not pedantry** — P0.6 enforces both:
+
+- `--ink-disabled` is for disabled controls *only*. WCAG exempts disabled text from contrast;
+  placeholders are **not** exempt, so they use `--ink-subtle`. Reaching for `--ink-disabled`
+  because something "should look faint" is how a product fails an audit.
+- `--hairline*` are decorative and may sit below 3:1. Anything that defines the **boundary of a
+  control** — input, checkbox, select — must use `--border-control`.
 
 ### 4.2 Colour is data
 
@@ -388,3 +399,13 @@ project.
 | No persistence specified | **IndexedDB autosave + `.toke` export** | The PRD's design loses all work on refresh. |
 | No undo/redo specified | **Command-stack history, v1** | Non-negotiable in a design tool. |
 | No test strategy | **Vitest + Playwright + golden files** | See §3. |
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
