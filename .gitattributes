@@ -1,0 +1,29 @@
+# Normalise line endings in the repository to LF, regardless of platform.
+# Without this, Windows and macOS/Linux contributors produce whole-file diffs
+# every time they touch a file.
+* text=auto eol=lf
+
+# Windows-only files that genuinely require CRLF.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binary — never normalise, never diff as text.
+# The PDF golden-file baselines (IMPLEMENTATION_PLAN.md P8.*) MUST be binary:
+# line-ending translation corrupts them and the golden suite fails obscurely.
+*.pdf     binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.webp    binary
+*.ico     binary
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.otf     binary
+*.wasm    binary
+*.sqlite  binary
+*.toke    binary
+
+# Lockfile: generated, collapse it in reviews.
+package-lock.json linguist-generated=true -diff

@@ -1,0 +1,65 @@
+# ---- dependencies ----
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/versions
+
+# ---- build output ----
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- testing ----
+coverage/
+.nyc_output/
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/blob-report/
+
+# Golden-file PDF baselines ARE tracked (see IMPLEMENTATION_PLAN.md P8.*).
+# Only the diff artefacts produced by a failing run are ignored.
+/tests/golden/**/*.actual.pdf
+/tests/golden/**/*.diff.pdf
+
+# ---- environment ----
+# Never commit real secrets. Commit .env.example only.
+.env
+.env.*
+!.env.example
+
+# ---- vercel ----
+# Contains project/org linkage and auth state. Machine-local.
+.vercel
+
+# ---- editor ----
+# Share a minimal baseline; keep everything personal out.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# ---- os ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- local agent / tooling state ----
+.remember/
+.claude/settings.local.json
+
+# ---- logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
