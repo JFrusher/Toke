@@ -1,3 +1,5 @@
+import type { ParsedCsv } from '@/engine/db/csv';
+import type { ImportPlan, ImportReport } from '@/engine/db/import';
 import type {
   DbReply,
   DbRequest,
@@ -24,6 +26,8 @@ export type DbClient = {
   query(sql: string, params?: readonly SqlValue[]): Promise<Result<QueryResult>>;
   exec(sql: string, params?: readonly SqlValue[]): Promise<Result<ExecResult>>;
   export(): Promise<Result<Uint8Array>>;
+  migrate(): Promise<Result<{ from: number; to: number }>>;
+  importCsv(csv: ParsedCsv, plan: ImportPlan): Promise<Result<ImportReport>>;
   close(): void;
 };
 
@@ -97,6 +101,20 @@ export function createDbClient(transport: Transport): DbClient {
       return reply.value.op === 'export'
         ? ok(reply.value.bytes)
         : wrongShape('export', reply.value.op);
+    },
+
+    async migrate() {
+      const reply = await send({ op: 'migrate' });
+      if (!reply.ok) return err(reply.error);
+      if (reply.value.op !== 'migrate') return wrongShape('migrate', reply.value.op);
+      return ok({ from: reply.value.from, to: reply.value.to });
+    },
+
+    async importCsv(csv, plan) {
+      const reply = await send({ op: 'import', csv, plan });
+      if (!reply.ok) return err(reply.error);
+      if (reply.value.op !== 'import') return wrongShape('import', reply.value.op);
+      return ok({ inserted: reply.value.inserted, createdColumns: reply.value.createdColumns });
     },
 
     close() {

@@ -1,4 +1,5 @@
 import type { DatabaseHandle } from '@/engine/db/database';
+import type { Row } from '@/engine/db/protocol';
 import { appError } from '@/lib/errors';
 import { err, isErr, ok, type Result } from '@/lib/result';
 
@@ -140,12 +141,18 @@ export function tableColumns(db: DatabaseHandle, table: string): Result<readonly
   const result = db.query(`PRAGMA table_info("${table.replace(/"/g, '""')}")`);
   if (isErr(result)) return err(result.error);
 
-  return ok(
-    result.value.rows.map((row) => ({
-      name: String(row.name),
-      declaredType: String(row.type ?? ''),
-      notNull: row.notnull === 1,
-      primaryKey: row.pk === 1,
-    })),
-  );
+  return ok(toTableColumns(result.value.rows));
+}
+
+/**
+ * Pure mapper over `PRAGMA table_info` rows. Split out so the main thread can
+ * introspect over RPC without a dedicated worker op.
+ */
+export function toTableColumns(rows: readonly Row[]): readonly TableColumn[] {
+  return rows.map((row) => ({
+    name: String(row.name),
+    declaredType: String(row.type ?? ''),
+    notNull: row.notnull === 1,
+    primaryKey: row.pk === 1,
+  }));
 }

@@ -359,12 +359,18 @@ crossing into geometry a compile error.
 
 ## 7. Version Pins
 
-`next@16` · `react@19` · `fabric@6.9.1` · `zustand@5` · `@tanstack/react-table@9` ·
+`next@16` · `react@19` · `fabric@6.9.1` · `zustand@5` · `@tanstack/react-virtual` ·
 `sql.js@1.14` · `pdf-lib@1.17.1` + `@pdf-lib/fontkit` · `papaparse` · `biome` · `vitest` ·
 `@playwright/test`
 
 Notes:
 - **Fabric 6.9.1, not 7.x.** 6.x is what the documentation and community examples target.
+- **No `@tanstack/react-table`.** Dropped after building the grid: the columns come from runtime
+  schema introspection and the only behaviours are sort and inline edit, so a headless table model
+  earned nothing over `[...rows].sort()`. `@tanstack/react-virtual` stays — virtualisation is
+  genuinely non-trivial.
+- **No component library for dialogs.** Native `<dialog>` + `showModal()` already provides focus
+  trapping, Escape-to-close, `aria-modal` and an inert background, which are the only hard parts.
 - **`pdf-lib` is effectively unmaintained** (1.17.1 is ~4 years old). Accepted deliberately: we use
   it as a low-level PDF writer, not a renderer, and our own renderer sits on top. Keep the
   dependency surface narrow so it stays replaceable.

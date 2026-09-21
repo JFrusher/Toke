@@ -1,7 +1,9 @@
 /// <reference lib="webworker" />
 
 import { type DatabaseHandle, openDatabase } from '@/engine/db/database';
+import { importCsv } from '@/engine/db/import';
 import type { DbReply, DbRequestEnvelope, DbSuccess } from '@/engine/db/protocol';
+import { migrate } from '@/engine/db/schema';
 import { appError } from '@/lib/errors';
 
 /**
@@ -69,6 +71,29 @@ async function handleRequest(envelope: DbRequestEnvelope): Promise<void> {
     reply(
       result.ok
         ? { id, ok: true, result: { op: 'exec', ...result.value } satisfies DbSuccess }
+        : { id, ok: false, error: result.error },
+    );
+    return;
+  }
+
+  if (payload.op === 'migrate') {
+    const result = migrate(handle);
+    reply(
+      result.ok
+        ? { id, ok: true, result: { op: 'migrate', ...result.value } }
+        : { id, ok: false, error: result.error },
+    );
+    return;
+  }
+
+  if (payload.op === 'import') {
+    // Runs worker-side so the whole import stays inside one SQLite
+    // transaction. Driving it from the main thread over RPC would break
+    // atomicity: a failure mid-run would leave rows already committed.
+    const result = importCsv(handle, payload.csv, payload.plan);
+    reply(
+      result.ok
+        ? { id, ok: true, result: { op: 'import', ...result.value } }
         : { id, ok: false, error: result.error },
     );
     return;

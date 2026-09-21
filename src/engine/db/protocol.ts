@@ -1,3 +1,5 @@
+import type { ParsedCsv } from '@/engine/db/csv';
+import type { ImportPlan, ImportReport } from '@/engine/db/import';
 import type { AppError } from '@/lib/errors';
 
 /**
@@ -27,13 +29,21 @@ export type DbRequest =
   | { readonly op: 'init'; readonly bytes?: Uint8Array }
   | { readonly op: 'query'; readonly sql: string; readonly params?: readonly SqlValue[] }
   | { readonly op: 'exec'; readonly sql: string; readonly params?: readonly SqlValue[] }
-  | { readonly op: 'export' };
+  | { readonly op: 'export' }
+  | { readonly op: 'migrate' }
+  | {
+      readonly op: 'import';
+      readonly csv: ParsedCsv;
+      readonly plan: ImportPlan;
+    };
 
 export type DbSuccess =
   | { readonly op: 'init' }
   | ({ readonly op: 'query' } & QueryResult)
   | ({ readonly op: 'exec' } & ExecResult)
-  | { readonly op: 'export'; readonly bytes: Uint8Array };
+  | { readonly op: 'export'; readonly bytes: Uint8Array }
+  | { readonly op: 'migrate'; readonly from: number; readonly to: number }
+  | ({ readonly op: 'import' } & ImportReport);
 
 export type DbRequestEnvelope = {
   readonly id: number;

@@ -96,7 +96,7 @@ export function parseCsv(input: string): Result<ParsedCsv> {
 
   const names = header.map((name) => name.trim());
 
-  const blank = names.findIndex((name) => name === '');
+  const blank = names.indexOf('');
   if (blank !== -1) {
     return err(
       appError('CSV_INVALID_HEADER', `Column ${blank + 1} has no name.`, {
