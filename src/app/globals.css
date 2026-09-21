@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* Placeholder base. The real palette, type scale and density system land in
    P0.5 (see IMPLEMENTATION_PLAN.md). Kept deliberately minimal so P0.1's
