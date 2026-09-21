@@ -7,6 +7,8 @@
  */
 
 export type ErrorCode =
+  | 'CSV_IMPORT_FAILED'
+  | 'RECORD_SOURCE_NOT_READONLY'
   | 'CSV_EMPTY'
   | 'CSV_INVALID_HEADER'
   | 'SQL_ERROR'
