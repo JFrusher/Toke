@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTokenised, parseTokens, tokenColumns } from '@/engine/tokens/parser';
+import { hasTokenSyntax, isTokenised, parseTokens, tokenColumns } from '@/engine/tokens/parser';
 import { isErr, isOk } from '@/lib/result';
 
 function parse(input: string) {
@@ -151,6 +151,28 @@ describe('isTokenised', () => {
 
   it('is false for an unclosed brace', () => {
     expect(isTokenised('{{ first_name')).toBe(false);
+  });
+});
+
+describe('hasTokenSyntax', () => {
+  it('is true for a valid token', () => {
+    expect(hasTokenSyntax('{{ first_name }}')).toBe(true);
+  });
+
+  it('is TRUE for a malformed token, unlike isTokenised', () => {
+    // Pre-flight relies on this. isTokenised is false here because the string
+    // cannot produce a token, and skipping the node would hide the broken
+    // binding entirely.
+    expect(isTokenised('{{ x | shout }}')).toBe(false);
+    expect(hasTokenSyntax('{{ x | shout }}')).toBe(true);
+  });
+
+  it('is false for plain text', () => {
+    expect(hasTokenSyntax('Ada Lovelace')).toBe(false);
+  });
+
+  it('is false for an unclosed brace, which reads as literal text', () => {
+    expect(hasTokenSyntax('{{ first_name')).toBe(false);
   });
 });
 

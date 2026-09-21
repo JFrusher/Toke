@@ -29,7 +29,7 @@ export type RecordSet = {
  * must not be able to mutate. Otherwise cycling through records would quietly
  * rewrite the guest list.
  */
-function assertReadOnly(sql: string): Result<true> {
+export function assertReadOnly(sql: string): Result<true> {
   const stripped = sql
     .replace(/--[^\n]*/g, '')
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -89,6 +89,19 @@ export function runRecordSource(db: DatabaseHandle, sql: string): Result<RecordS
  * declared schema: a record source may join, alias or compute columns that
  * exist in no table.
  */
+/**
+ * Same inference as columnSchemaFor, over plain rows.
+ *
+ * The main thread gets rows over RPC rather than a RecordSet, and must not
+ * build a second inference rule — two would drift.
+ */
+export function columnSchemaForRows(
+  columns: readonly string[],
+  rows: readonly Row[],
+): readonly ColumnSchema[] {
+  return columnSchemaFor({ sql: '', rows, rowCount: rows.length, columns });
+}
+
 export function columnSchemaFor(set: RecordSet): readonly ColumnSchema[] {
   return set.columns.map((name) => {
     const values = set.rows.map((row) => {

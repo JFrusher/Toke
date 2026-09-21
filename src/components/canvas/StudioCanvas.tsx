@@ -176,7 +176,9 @@ export function StudioCanvas() {
   const artboard = useCanvasStore((s) => s.artboard);
   const mode = useStudioStore((s) => s.mode);
   const cursor = useStudioStore((s) => s.cursor);
-  const rows = useDataStore((s) => s.rows);
+  // The record source, not the edited table: a design may print only
+  // accepted guests, and previewing the wrong set hides real problems.
+  const rows = useDataStore((s) => s.records);
 
   const commitFromFabric = useCallback((label: string, coalesceKey?: string) => {
     const store = useCanvasStore.getState();

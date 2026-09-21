@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import { createDbClient, type DbClient } from '@/engine/db/client';
 import type { ImportMode, ImportPlan, ImportReport } from '@/engine/db/import';
 import type { Row, SqlValue } from '@/engine/db/protocol';
+import { assertReadOnly, type ColumnSchema, columnSchemaForRows } from '@/engine/db/recordSource';
 import { type TableColumn, toTableColumns } from '@/engine/db/schema';
 import { createWorkerTransport } from '@/engine/db/workerTransport';
+import { DEFAULT_RECORD_SOURCE } from '@/engine/persistence/project';
 import type { AppError } from '@/lib/errors';
 import { appError } from '@/lib/errors';
 import { isErr, isOk, type Result } from '@/lib/result';
@@ -28,8 +30,20 @@ type DataState = {
   readonly status: DataStatus;
   readonly error: AppError | null;
   readonly table: string;
+  /** Everything in the edited table — what the data grid shows. */
   readonly rows: readonly Row[];
   readonly columns: readonly TableColumn[];
+
+  /**
+   * The design's record source: the query whose rows ARE the print run.
+   * Distinct from `rows` on purpose — the grid edits the whole table while a
+   * design may print only accepted guests, and previewing the wrong set is
+   * how a run comes back with the wrong people on it.
+   */
+  readonly recordSource: string;
+  readonly records: readonly Row[];
+  readonly recordColumns: readonly ColumnSchema[];
+  readonly recordSourceError: AppError | null;
 
   open: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -37,6 +51,8 @@ type DataState = {
   updateCell: (id: number, column: string, value: SqlValue) => Promise<void>;
   addRow: () => Promise<void>;
   deleteRow: (id: number) => Promise<void>;
+  setRecordSource: (sql: string) => Promise<void>;
+  refreshRecords: () => Promise<void>;
   exportDatabase: () => Promise<Uint8Array>;
   loadDatabase: (bytes: Uint8Array) => Promise<void>;
 };
@@ -51,6 +67,10 @@ export const useDataStore = create<DataState>((set, get) => ({
   table: 'guests',
   rows: [],
   columns: [],
+  recordSource: DEFAULT_RECORD_SOURCE,
+  records: [],
+  recordColumns: [],
+  recordSourceError: null,
 
   async open() {
     if (get().status === 'opening' || get().status === 'ready') return;
@@ -94,6 +114,45 @@ export const useDataStore = create<DataState>((set, get) => ({
       columns: toTableColumns(info.value.rows),
       rows: rows.value.rows,
       error: null,
+    });
+
+    // The record source reads the same database, so it has to be re-run
+    // whenever the table changes or the preview goes stale.
+    await get().refreshRecords();
+  },
+
+  async setRecordSource(sql) {
+    set({ recordSource: sql });
+    await get().refreshRecords();
+  },
+
+  async refreshRecords() {
+    const sql = get().recordSource;
+
+    // Validated on the main thread before it reaches the worker: a record
+    // source re-runs on every preview and every export, so a mutating query
+    // would quietly rewrite the guest list while the user cycled records.
+    const readOnly = assertReadOnly(sql);
+    if (isErr(readOnly)) {
+      set({ recordSourceError: readOnly.error, records: [], recordColumns: [] });
+      return;
+    }
+
+    const result = await ensureClient().query(sql);
+    if (isErr(result)) {
+      // Previous records are deliberately kept: an invalid query while the
+      // user is mid-edit should not blank the canvas.
+      set({ recordSourceError: result.error });
+      return;
+    }
+
+    set({
+      records: result.value.rows,
+      recordColumns: columnSchemaForRows(
+        result.value.columns.map((column) => column.name),
+        result.value.rows,
+      ),
+      recordSourceError: null,
     });
   },
 

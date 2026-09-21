@@ -114,14 +114,14 @@ test('the record cursor clamps rather than wrapping', async ({ page }) => {
   await importGuests(page);
   await page.getByTestId('mode-live').click();
 
-  // Stepping back from the first record must stay put, not jump to the last.
-  await page.getByRole('button', { name: 'Previous record' }).click();
+  // The cycle bar disables the end controls, which is the clamp made visible
+  // — a user cannot step off either end, so there is nothing to wrap around.
+  await expect(page.getByRole('button', { name: 'Previous record' })).toBeDisabled();
   await expect(page.getByTestId('record-counter')).toHaveText('1 / 3');
 
-  for (let i = 0; i < 6; i += 1) {
-    await page.getByRole('button', { name: 'Next record' }).click();
-  }
+  await page.getByRole('button', { name: 'Last record' }).click();
   await expect(page.getByTestId('record-counter')).toHaveText('3 / 3');
+  await expect(page.getByRole('button', { name: 'Next record' })).toBeDisabled();
 });
 
 test('an unknown column is reported, not silently blank', async ({ page }) => {

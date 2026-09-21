@@ -44,15 +44,23 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
   async function confirm() {
     if (text === null) return;
     setBusy(true);
-    const result = await runImport(text, mode);
-    setBusy(false);
 
-    if (isErr(result)) {
-      setProblem(result.error.message);
-      return;
+    try {
+      const result = await runImport(text, mode);
+      if (isErr(result)) {
+        setProblem(result.error.message);
+        return;
+      }
+      reset();
+      onClose();
+    } catch (error) {
+      // Without this, a rejection leaves `busy` true and the dialog open with
+      // no message — the user is stuck in a modal that never resolves and has
+      // no idea why.
+      setProblem(error instanceof Error ? error.message : 'The import failed.');
+    } finally {
+      setBusy(false);
     }
-    reset();
-    onClose();
   }
 
   return (

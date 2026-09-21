@@ -96,9 +96,13 @@ test('imported guest data survives the round trip', async ({ page }) => {
     buffer: Buffer.from('first_name,last_name\nAda,Lovelace\nGrace,Hopper', 'utf8'),
   });
   await page.getByTestId('csv-confirm').click();
+  // The modal makes the page inert until it closes, and under the parallel
+  // run the import genuinely outlasts the 5s default: worker, SQLite, the
+  // migration and now the record-source query all contend.
+  await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 20_000 });
 
   await page.getByTestId('toggle-data').click();
-  await expect(page.getByRole('grid')).toContainText('Lovelace');
+  await expect(page.getByRole('grid')).toContainText('Lovelace', { timeout: 20_000 });
 
   const download = page.waitForEvent('download');
   await page.getByTestId('save-project').click();
@@ -113,7 +117,7 @@ test('imported guest data survives the round trip', async ({ page }) => {
 
   await page.getByTestId('toggle-data').click();
   // The SQLite file travelled inside the zip, not just the scene graph.
-  await expect(page.getByRole('grid')).toContainText('Lovelace');
+  await expect(page.getByRole('grid')).toContainText('Lovelace', { timeout: 20_000 });
   await expect(page.getByRole('grid')).toContainText('Hopper');
 });
 

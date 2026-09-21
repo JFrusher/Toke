@@ -8,12 +8,15 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
-  // Conditionally spread rather than `workers: isCI ? 1 : undefined`.
-  // exactOptionalPropertyTypes (tsconfig, CLAUDE.md §3) rejects an explicit
-  // `undefined` for an optional property — omitting the key is the correct
-  // way to say "use the default".
-  ...(isCI ? { workers: 1 } : {}),
+  // Capped rather than left to the CPU count. Every spec boots a SQLite WASM
+  // worker, runs migrations and imports a CSV; four of those against a single
+  // Turbopack dev server contend badly enough to time out assertions that
+  // pass comfortably in isolation.
+  workers: isCI ? 1 : 2,
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list']],
+  // Raised from the 5s default for the same reason: these are real waits on
+  // a worker and a database, not on a render.
+  expect: { timeout: 15_000 },
   use: {
     baseURL: BASE_URL,
     trace: 'on-first-retry',

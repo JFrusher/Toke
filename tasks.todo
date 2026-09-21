@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-21, after Phase 6.
+Last audited: 2026-09-21, after Phase 7.
 
 ---
 
@@ -187,16 +187,31 @@ and the embedded font must be the same file or the P5.3 guarantee is void.
 kerning, which CLAUDE.md §8 scopes v1 to. Ligatures, contextual alternates and
 any complex script will measure and render incorrectly.
 
-### INC-18 · Record source is still the raw guests table · OPEN · P6.7, P7.1
-Live Mode previews `useDataStore.rows`, which is `SELECT * FROM guests ORDER
-BY id` — not the design's own record source. `runRecordSource` exists and is
-tested but nothing calls it, so a filtered print run cannot be previewed.
-P7.1 should replace the cursor's data source.
+### INC-18 · Record source is still the raw guests table · DONE · 2026-09-21
+**Fixed in P7.1.** `useDataStore` now holds `recordSource`, `records` and
+`recordColumns` separately from the grid's table view, validated read-only on
+the main thread before the query is sent. Live Mode and pre-flight both read
+`records`.
 
-### INC-19 · Overflow is signalled on the canvas but nowhere else · OPEN · P6.6
-`renderTextNode` returns an `overflow` flag and the canvas draws a rust
-outline. The binding panel does not show it, and there is no per-record list
-of which records overflow — that is P7.3's pre-flight report.
+Still open as INC-21: there is no UI to EDIT the record source, so it is
+always the default `SELECT * FROM guests`.
+
+### INC-19 · Overflow is not shown in the binding panel · OPEN · P6.6
+The canvas draws a rust outline and pre-flight lists every affected record,
+but the binding panel itself does not say the currently previewed record
+overflows.
+
+### INC-21 · No record-source editor · OPEN · P7.1, P9.3
+The store supports any read-only query, but nothing lets a user write one —
+a design cannot yet print only accepted guests. Needs the SQL console (P9.3)
+or a simpler filter control.
+
+### INC-22 · Pre-flight does not check images or fonts · OPEN · P7.3
+> "Report per-record: text overflow, unresolved tokens, missing assets."
+
+Overflow, unresolved and empty are covered. Missing assets are not, because
+image placement does not exist yet (BLK-1). A missing font face is also
+unchecked: `getFont` returning null silently skips the fit check.
 
 ### INC-20 · Token errors do not reach a diagnostics surface · OPEN · P9.2
 A parse error shows in the binding panel. A resolution error (unknown column

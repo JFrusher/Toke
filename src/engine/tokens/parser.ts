@@ -119,6 +119,20 @@ export function isTokenised(input: string): boolean {
   return parsed.ok && parsed.value.some((segment) => segment.kind === 'token');
 }
 
+/**
+ * True when the string is MEANT to contain a token, whether or not it parses.
+ *
+ * Distinct from isTokenised, which is false for a malformed token because it
+ * cannot produce one. Pre-flight must use this: skipping unparseable nodes
+ * would hide exactly the bindings that are broken, and report the run clean
+ * while those objects print nothing.
+ */
+export function hasTokenSyntax(input: string): boolean {
+  if (isTokenised(input)) return true;
+  const parsed = parseTokens(input);
+  return !parsed.ok;
+}
+
 /** Distinct column references, in order of first appearance. */
 export function tokenColumns(input: string): readonly string[] {
   const parsed = parseTokens(input);

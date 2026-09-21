@@ -1,9 +1,9 @@
 'use client';
 
+import { CycleBar } from '@/components/preview/CycleBar';
 import { Button } from '@/components/ui/Button';
 import type { AlignEdge } from '@/engine/canvas/arrange';
 import { type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
-import { useDataStore } from '@/engine/store/useDataStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
 import { cn } from '@/lib/cn';
 
@@ -24,7 +24,7 @@ const ALIGNMENTS: readonly { edge: AlignEdge; label: string }[] = [
   { edge: 'bottom', label: 'Align bottom' },
 ];
 
-export function CanvasToolbar() {
+export function CanvasToolbar({ onPreflight }: { onPreflight: () => void }) {
   const tool = useCanvasStore((s) => s.tool);
   const setTool = useCanvasStore((s) => s.setTool);
   const zoom = useCanvasStore((s) => s.zoom);
@@ -44,9 +44,6 @@ export function CanvasToolbar() {
 
   const mode = useStudioStore((s) => s.mode);
   const setMode = useStudioStore((s) => s.setMode);
-  const cursor = useStudioStore((s) => s.cursor);
-  const step = useStudioStore((s) => s.step);
-  const recordCount = useDataStore((s) => s.rows.length);
 
   return (
     <div className="flex shrink-0 items-center gap-1 border-hairline-strong border-b bg-panel px-2 py-1.5">
@@ -74,23 +71,7 @@ export function CanvasToolbar() {
         ))}
       </fieldset>
 
-      {mode === 'live' && (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="quiet"
-            onClick={() => step(-1, recordCount)}
-            aria-label="Previous record"
-          >
-            ‹
-          </Button>
-          <span data-numeric data-testid="record-counter" className="text-[11px] text-ink-muted">
-            {recordCount === 0 ? 'no records' : `${cursor + 1} / ${recordCount}`}
-          </span>
-          <Button variant="quiet" onClick={() => step(1, recordCount)} aria-label="Next record">
-            ›
-          </Button>
-        </div>
-      )}
+      {mode === 'live' && <CycleBar />}
 
       <span className="mx-1 h-5 w-px bg-hairline-strong" />
       <div role="toolbar" aria-label="Tools" className="flex items-center gap-0.5">
@@ -184,6 +165,12 @@ export function CanvasToolbar() {
       </Button>
 
       <div className="ml-auto flex items-center gap-2">
+        <Button onClick={onPreflight} data-testid="open-preflight">
+          Pre-flight
+        </Button>
+
+        <span className="h-5 w-px bg-hairline-strong" />
+
         <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
           <input
             type="checkbox"

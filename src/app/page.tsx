@@ -8,6 +8,7 @@ import { CsvImportDialog } from '@/components/data/CsvImportDialog';
 import { DataGrid } from '@/components/data/DataGrid';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
+import { PreflightReport } from '@/components/preview/PreflightReport';
 import { FileMenu } from '@/components/shell/FileMenu';
 import { Button } from '@/components/ui/Button';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
@@ -45,6 +46,7 @@ export default function StudioPage() {
 
   const [importing, setImporting] = useState(false);
   const [showData, setShowData] = useState(false);
+  const [preflighting, setPreflighting] = useState(false);
 
   useEffect(() => {
     void openDatabase();
@@ -118,7 +120,7 @@ export default function StudioPage() {
         </div>
       </header>
 
-      <CanvasToolbar />
+      <CanvasToolbar onPreflight={() => setPreflighting(true)} />
 
       <div className="flex min-h-0 flex-1">
         <aside className="flex w-56 shrink-0 flex-col border-hairline-strong border-r bg-panel">
@@ -151,6 +153,7 @@ export default function StudioPage() {
       )}
 
       <CsvImportDialog open={importing} onClose={() => setImporting(false)} />
+      <PreflightReport open={preflighting} onClose={() => setPreflighting(false)} />
     </main>
   );
 }
