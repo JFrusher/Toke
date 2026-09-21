@@ -6,26 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-
     "test": "vitest run --project=unit",
     "test:watch": "vitest --project=unit",
     "test:pdf": "vitest run --project=golden --passWithNoTests",
     "test:e2e": "playwright test",
-
     "env:pull": "vercel env pull .env.local",
     "env:pull:preview": "vercel env pull .env.local --environment=preview",
     "env:list": "vercel env ls",
-
     "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
+    "@types/sql.js": "^1.4.11",
     "next": "16.3.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sql.js": "^1.14.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

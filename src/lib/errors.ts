@@ -7,6 +7,12 @@
  */
 
 export type ErrorCode =
+  | 'SQL_ERROR'
+  | 'DB_OPEN_FAILED'
+  | 'DB_CLOSED'
+  | 'DB_PROTOCOL'
+  | 'DB_NOT_INITIALISED'
+  | 'DB_ERROR'
   | 'INVALID_LENGTH'
   | 'SINGULAR_MATRIX'
   | 'INVALID_SPEC'
