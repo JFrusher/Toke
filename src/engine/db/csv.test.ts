@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inferType, parseCsv, proposeMapping } from '@/engine/db/csv';
+import type { TableColumn } from '@/engine/db/schema';
 import { isErr, isOk } from '@/lib/result';
 
 function parse(input: string) {
@@ -146,11 +147,11 @@ describe('inferType', () => {
 });
 
 describe('proposeMapping', () => {
-  const target = [
-    { name: 'id', declaredType: 'INTEGER', notNull: false },
-    { name: 'first_name', declaredType: 'TEXT', notNull: true },
-    { name: 'last_name', declaredType: 'TEXT', notNull: true },
-    { name: 'is_vegetarian', declaredType: 'BOOLEAN', notNull: false },
+  const target: TableColumn[] = [
+    { name: 'id', declaredType: 'INTEGER', notNull: false, primaryKey: true },
+    { name: 'first_name', declaredType: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'last_name', declaredType: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'is_vegetarian', declaredType: 'BOOLEAN', notNull: false, primaryKey: false },
   ];
 
   it('maps exact name matches', () => {
