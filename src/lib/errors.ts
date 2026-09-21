@@ -6,7 +6,7 @@
  * an error came from. Populate it wherever the error has a spatial origin.
  */
 
-export type ErrorCode = 'INVALID_LENGTH';
+export type ErrorCode = 'INVALID_LENGTH' | 'SINGULAR_MATRIX';
 
 export type AppError = {
   readonly code: ErrorCode;
