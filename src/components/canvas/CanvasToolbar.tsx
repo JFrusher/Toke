@@ -3,6 +3,8 @@
 import { Button } from '@/components/ui/Button';
 import type { AlignEdge } from '@/engine/canvas/arrange';
 import { type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
+import { useDataStore } from '@/engine/store/useDataStore';
+import { useStudioStore } from '@/engine/store/useStudioStore';
 import { cn } from '@/lib/cn';
 
 const TOOLS: readonly { id: Tool; label: string; key: string }[] = [
@@ -40,8 +42,57 @@ export function CanvasToolbar() {
   const setSnapEnabled = useCanvasStore((s) => s.setSnapEnabled);
   const selectionCount = useCanvasStore((s) => s.selection.length);
 
+  const mode = useStudioStore((s) => s.mode);
+  const setMode = useStudioStore((s) => s.setMode);
+  const cursor = useStudioStore((s) => s.cursor);
+  const step = useStudioStore((s) => s.step);
+  const recordCount = useDataStore((s) => s.rows.length);
+
   return (
     <div className="flex shrink-0 items-center gap-1 border-hairline-strong border-b bg-panel px-2 py-1.5">
+      {/* A real fieldset rather than role="group" on a div: the label is
+          useful to a screen reader, and the native element carries it. */}
+      <fieldset className="flex items-center gap-0.5 border-0 p-0">
+        <legend className="sr-only">Mode</legend>
+        {(['token', 'live'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={mode === value}
+            data-testid={`mode-${value}`}
+            onClick={() => setMode(value)}
+            className={cn(
+              'h-7 rounded-[2px] border px-2 text-[12px] font-medium transition-colors duration-[120ms]',
+              'focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1',
+              mode === value
+                ? 'border-accent bg-accent text-paper'
+                : 'border-transparent text-ink-muted hover:bg-accent-weak hover:text-ink',
+            )}
+          >
+            {value === 'token' ? 'Token' : 'Live'}
+          </button>
+        ))}
+      </fieldset>
+
+      {mode === 'live' && (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="quiet"
+            onClick={() => step(-1, recordCount)}
+            aria-label="Previous record"
+          >
+            ‹
+          </Button>
+          <span data-numeric data-testid="record-counter" className="text-[11px] text-ink-muted">
+            {recordCount === 0 ? 'no records' : `${cursor + 1} / ${recordCount}`}
+          </span>
+          <Button variant="quiet" onClick={() => step(1, recordCount)} aria-label="Next record">
+            ›
+          </Button>
+        </div>
+      )}
+
+      <span className="mx-1 h-5 w-px bg-hairline-strong" />
       <div role="toolbar" aria-label="Tools" className="flex items-center gap-0.5">
         {TOOLS.map((entry) => (
           <button

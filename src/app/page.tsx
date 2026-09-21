@@ -6,6 +6,7 @@ import { CanvasToolbar } from '@/components/canvas/CanvasToolbar';
 import { LayersPanel } from '@/components/canvas/LayersPanel';
 import { CsvImportDialog } from '@/components/data/CsvImportDialog';
 import { DataGrid } from '@/components/data/DataGrid';
+import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
 import { FileMenu } from '@/components/shell/FileMenu';
 import { Button } from '@/components/ui/Button';
@@ -130,6 +131,7 @@ export default function StudioPage() {
 
         <aside className="w-60 shrink-0 overflow-auto border-hairline-strong border-l bg-panel">
           <TransformFields />
+          <TokenBindingPanel />
         </aside>
       </div>
 

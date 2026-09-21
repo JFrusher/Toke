@@ -1,4 +1,5 @@
 import type {
+  AutoFitConfig,
   EllipseNode,
   Fill,
   FontWeight,
@@ -104,6 +105,8 @@ export function textNode(
     tracking?: number;
     lineHeight?: number;
     fill?: Fill;
+    fallback?: string;
+    autoFit?: AutoFitConfig | null;
   },
 ): TextNode {
   return {
@@ -120,6 +123,11 @@ export function textNode(
     // Text is painted, not outlined. A default stroke would double every
     // glyph edge in the PDF.
     fill: input.fill ?? { kind: 'solid', color: INK },
+    fallback: input.fallback ?? '',
+    // Shrink by default: silently overflowing the trim is the worse failure,
+    // and it is invisible until the cards are printed.
+    autoFit:
+      input.autoFit === undefined ? { mode: 'shrink', minFontSize: points(6) } : input.autoFit,
   };
 }
 

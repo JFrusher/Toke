@@ -17,7 +17,9 @@ const FONT = loaded.value;
 
 const BOX = { width: p(120), height: p(40) };
 
-function fit(text: string, overrides: Partial<Parameters<typeof autoFit>[0]> = {}) {
+// NOT named `fit`: that is Jest's alias for `it.only`, so a focused-test
+// lint rule fires on every call and a reader could misread it the same way.
+function fitText(text: string, overrides: Partial<Parameters<typeof autoFit>[0]> = {}) {
   return autoFit({
     text,
     font: FONT,
@@ -43,17 +45,17 @@ function widthAt(text: string, size: number): number {
 
 describe('text that already fits', () => {
   it('keeps the requested size', () => {
-    const result = fit('Ada');
+    const result = fitText('Ada');
     expect(result.fontSize).toBe(18);
     expect(result.overflow).toBe(false);
   });
 
   it('returns the text unchanged', () => {
-    expect(fit('Ada').text).toBe('Ada');
+    expect(fitText('Ada').text).toBe('Ada');
   });
 
   it('handles an empty string', () => {
-    const result = fit('');
+    const result = fitText('');
     expect(result.fontSize).toBe(18);
     expect(result.overflow).toBe(false);
   });
@@ -61,7 +63,7 @@ describe('text that already fits', () => {
 
 describe('shrink to fit', () => {
   it('reduces the size until the text fits', () => {
-    const result = fit('Bartholomew Winterbourne Fitzgerald');
+    const result = fitText('Bartholomew Winterbourne Fitzgerald');
     expect(result.fontSize).toBeLessThan(18);
     expect(widthAt(result.text, result.fontSize)).toBeLessThanOrEqual(BOX.width + 1e-6);
   });
@@ -76,7 +78,7 @@ describe('shrink to fit', () => {
       'Bartholomew Winterbourne Fitzgerald-Smythe',
       'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
     ]) {
-      const result = fit(name);
+      const result = fitText(name);
       if (!result.overflow) {
         expect(widthAt(result.text, result.fontSize)).toBeLessThanOrEqual(BOX.width + 1e-6);
       }
@@ -84,12 +86,12 @@ describe('shrink to fit', () => {
   });
 
   it('never goes below the minimum size', () => {
-    const result = fit('W'.repeat(200));
+    const result = fitText('W'.repeat(200));
     expect(result.fontSize).toBeGreaterThanOrEqual(6);
   });
 
   it('flags overflow when the minimum still does not fit', () => {
-    const result = fit('W'.repeat(200));
+    const result = fitText('W'.repeat(200));
     expect(result.overflow).toBe(true);
     expect(result.fontSize).toBe(6);
   });
@@ -97,47 +99,47 @@ describe('shrink to fit', () => {
   it('converges in at most eight iterations', () => {
     // Binary search over a continuous range. Linear decrement would take
     // hundreds of measurements per record and make a 500-card export crawl.
-    const result = fit('Bartholomew Winterbourne Fitzgerald');
+    const result = fitText('Bartholomew Winterbourne Fitzgerald');
     expect(result.iterations).toBeLessThanOrEqual(8);
   });
 
   it('converges for a wide size range', () => {
-    const result = fit('Bartholomew Winterbourne', { fontSize: p(400), minFontSize: p(1) });
+    const result = fitText('Bartholomew Winterbourne', { fontSize: p(400), minFontSize: p(1) });
     expect(result.iterations).toBeLessThanOrEqual(8);
     expect(result.fontSize).toBeLessThanOrEqual(400);
   });
 
   it('respects the box height as well as its width', () => {
-    const result = fit('Ada Lovelace', { box: { width: p(500), height: p(10) } });
+    const result = fitText('Ada Lovelace', { box: { width: p(500), height: p(10) } });
     expect(result.fontSize).toBeLessThan(18);
   });
 });
 
 describe('truncate', () => {
   it('shortens the text and appends an ellipsis', () => {
-    const result = fit('Bartholomew Winterbourne Fitzgerald', { mode: 'truncate' });
+    const result = fitText('Bartholomew Winterbourne Fitzgerald', { mode: 'truncate' });
     expect(result.text.endsWith('…')).toBe(true);
     expect(result.text.length).toBeLessThan('Bartholomew Winterbourne Fitzgerald'.length);
   });
 
   it('keeps the requested font size', () => {
-    expect(fit('Bartholomew Winterbourne Fitzgerald', { mode: 'truncate' }).fontSize).toBe(18);
+    expect(fitText('Bartholomew Winterbourne Fitzgerald', { mode: 'truncate' }).fontSize).toBe(18);
   });
 
   it('produces text that fits', () => {
-    const result = fit('Bartholomew Winterbourne Fitzgerald', { mode: 'truncate' });
+    const result = fitText('Bartholomew Winterbourne Fitzgerald', { mode: 'truncate' });
     expect(widthAt(result.text, result.fontSize)).toBeLessThanOrEqual(BOX.width + 1e-6);
   });
 
   it('leaves text that already fits alone', () => {
-    const result = fit('Ada', { mode: 'truncate' });
+    const result = fitText('Ada', { mode: 'truncate' });
     expect(result.text).toBe('Ada');
     expect(result.overflow).toBe(false);
   });
 
   it('never splits a surrogate pair', () => {
     // Cutting an emoji in half produces a replacement character on the card.
-    const result = fit('👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️', {
+    const result = fitText('👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️👰🏽‍♀️', {
       mode: 'truncate',
       box: { width: p(30), height: p(40) },
     });
@@ -151,7 +153,7 @@ describe('truncate', () => {
     // of the original; a cut inside the cluster would strand an acute accent
     // with nothing to sit on.
     const source = 'é'.repeat(40).normalize('NFD');
-    const result = fit(source, { mode: 'truncate', box: { width: p(30), height: p(40) } });
+    const result = fitText(source, { mode: 'truncate', box: { width: p(30), height: p(40) } });
 
     const kept = result.text.replace('…', '');
     const segment = (value: string) =>
@@ -164,28 +166,28 @@ describe('truncate', () => {
   });
 
   it('flags overflow when even one character will not fit', () => {
-    const result = fit('WWWW', { mode: 'truncate', box: { width: p(1), height: p(40) } });
+    const result = fitText('WWWW', { mode: 'truncate', box: { width: p(1), height: p(40) } });
     expect(result.overflow).toBe(true);
   });
 });
 
 describe('wrap', () => {
   it('wraps to the box width', () => {
-    const result = fit('Bartholomew Winterbourne Fitzgerald', { mode: 'wrap' });
+    const result = fitText('Bartholomew Winterbourne Fitzgerald', { mode: 'wrap' });
     expect(result.lines.length).toBeGreaterThan(1);
   });
 
   it('keeps the requested size when the wrapped text fits the box', () => {
     // 90pt, not 60: "Lovelace" alone measures 70.7pt at 18pt, so a 60pt box
     // cannot hold the longest wrapped line and a shrink is correct there.
-    const result = fit('Ada Lovelace', { mode: 'wrap', box: { width: p(90), height: p(100) } });
+    const result = fitText('Ada Lovelace', { mode: 'wrap', box: { width: p(90), height: p(100) } });
     expect(result.fontSize).toBe(18);
     expect(result.overflow).toBe(false);
   });
 
   it('shrinks when the wrapped text is too tall', () => {
     // Width alone is satisfied by wrapping; height is what forces a shrink.
-    const result = fit('Bartholomew Winterbourne Fitzgerald Smythe', {
+    const result = fitText('Bartholomew Winterbourne Fitzgerald Smythe', {
       mode: 'wrap',
       box: { width: p(60), height: p(30) },
     });
@@ -193,7 +195,7 @@ describe('wrap', () => {
   });
 
   it('flags overflow when it cannot fit even at the minimum', () => {
-    const result = fit('Bartholomew Winterbourne Fitzgerald Smythe '.repeat(10), {
+    const result = fitText('Bartholomew Winterbourne Fitzgerald Smythe '.repeat(10), {
       mode: 'wrap',
       box: { width: p(40), height: p(20) },
     });
@@ -201,7 +203,7 @@ describe('wrap', () => {
   });
 
   it('reports the wrapped lines', () => {
-    const result = fit('Ada Lovelace', { mode: 'wrap', box: { width: p(90), height: p(100) } });
+    const result = fitText('Ada Lovelace', { mode: 'wrap', box: { width: p(90), height: p(100) } });
     expect(result.lines.map((line) => line.text)).toEqual(['Ada', 'Lovelace']);
   });
 });
@@ -210,8 +212,8 @@ describe('determinism', () => {
   it('gives the same answer every time', () => {
     // Export measures the same string for hundreds of records; variance
     // would print inconsistent cards in one run.
-    const a = fit('Bartholomew Winterbourne');
-    const b = fit('Bartholomew Winterbourne');
+    const a = fitText('Bartholomew Winterbourne');
+    const b = fitText('Bartholomew Winterbourne');
     expect(a).toEqual(b);
   });
 });

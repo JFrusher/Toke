@@ -54,6 +54,11 @@ export type NodeBase = {
 export type TextAlign = 'left' | 'center' | 'right';
 export type FontWeight = 400 | 500 | 600;
 
+export type AutoFitConfig = {
+  readonly mode: 'shrink' | 'truncate' | 'wrap';
+  readonly minFontSize: Points;
+};
+
 export type TextNode = NodeBase & {
   readonly kind: 'text';
   readonly text: string;
@@ -67,6 +72,13 @@ export type TextNode = NodeBase & {
   /** Multiple of font size. */
   readonly lineHeight: number;
   readonly fill: Fill;
+  /**
+   * Shown when a token resolves to nothing. The token syntax in `text` IS the
+   * binding — there is no separate binding object to keep in sync with it.
+   */
+  readonly fallback: string;
+  /** null means render at the authored size and let it overflow. */
+  readonly autoFit: AutoFitConfig | null;
 };
 
 export type RectNode = NodeBase & {

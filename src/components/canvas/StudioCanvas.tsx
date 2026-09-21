@@ -7,8 +7,11 @@ import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
 import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { MAX_ZOOM, MIN_ZOOM, type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
+import { useDataStore } from '@/engine/store/useDataStore';
+import { useStudioStore } from '@/engine/store/useStudioStore';
 import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
 import { measureText } from '@/engine/text/measure';
+import { renderTextNode, type StudioMode } from '@/engine/tokens/render';
 import { points } from '@/engine/units/types';
 
 /**
@@ -99,7 +102,28 @@ export function withMeasuredSize(node: SceneNode): SceneNode {
   return { ...node, width: points(box.width), height: points(box.height) };
 }
 
-function buildFabricObject(node: SceneNode, fontsReady: boolean): fabric.FabricObject | null {
+/**
+ * What a text node should actually show right now — template in Token Mode,
+ * resolved and auto-fitted values in Live Mode. Goes through the same
+ * renderTextNode the PDF renderer will use in Phase 8.
+ */
+function textPresentation(node: SceneNode, mode: StudioMode, row: Record<string, unknown> | null) {
+  if (node.kind !== 'text') return null;
+
+  return renderTextNode({
+    node,
+    font: getFont(node.fontFamily, node.fontWeight, node.italic),
+    mode,
+    row,
+  });
+}
+
+function buildFabricObject(
+  node: SceneNode,
+  fontsReady: boolean,
+  mode: StudioMode,
+  row: Record<string, unknown> | null,
+): fabric.FabricObject | null {
   const props = toFabricProps(node);
 
   switch (node.kind) {
@@ -114,7 +138,11 @@ function buildFabricObject(node: SceneNode, fontsReady: boolean): fabric.FabricO
     case 'path':
       return new fabric.Path(node.d, props);
     case 'text': {
-      const text = new fabric.IText(node.text, props);
+      const shown = textPresentation(node, mode, row);
+      const text = new fabric.IText(shown?.text ?? node.text, {
+        ...props,
+        ...(shown === null ? {} : { fontSize: shown.fontSize }),
+      });
       const box = fontsReady ? measuredTextBox(node) : null;
       if (box !== null) text.set({ width: box.width, height: box.height });
       return text;
@@ -146,6 +174,9 @@ export function StudioCanvas() {
   const panY = useCanvasStore((s) => s.panY);
   const tool = useCanvasStore((s) => s.tool);
   const artboard = useCanvasStore((s) => s.artboard);
+  const mode = useStudioStore((s) => s.mode);
+  const cursor = useStudioStore((s) => s.cursor);
+  const rows = useDataStore((s) => s.rows);
 
   const commitFromFabric = useCallback((label: string, coalesceKey?: string) => {
     const store = useCanvasStore.getState();
@@ -258,6 +289,7 @@ export function StudioCanvas() {
     if (canvas === null || fromFabric.current) return;
 
     const objects = objectsRef.current;
+    const currentRow = (rows[cursor] ?? null) as Record<string, unknown> | null;
     const renderable = renderableNodes(nodes);
     const live = new Set(renderable.map((node) => node.id));
 
@@ -271,13 +303,26 @@ export function StudioCanvas() {
     for (const node of renderable) {
       const existing = objects.get(node.id);
       if (existing === undefined) {
-        const created = buildFabricObject(node, fontsReady);
+        const created = buildFabricObject(node, fontsReady, mode, currentRow);
         if (created === null) continue;
         created.set({ nodeId: node.id } as Partial<fabric.FabricObject>);
         objects.set(node.id, created);
         canvas.add(created);
       } else {
         existing.set(toFabricProps(node));
+
+        const shown = textPresentation(node, mode, currentRow);
+        if (shown !== null) {
+          existing.set({ text: shown.text, fontSize: shown.fontSize });
+          // Overflow is signalled on the canvas as well as in the panel —
+          // CLAUDE.md §4.7 forbids colour alone, and a rust outline is the
+          // only cue visible while looking at the artboard.
+          existing.set({
+            stroke: shown.overflow ? '#a6401f' : null,
+            strokeWidth: shown.overflow ? 0.5 : 0,
+          });
+        }
+
         // Guarded on fontsReady so the intent is explicit: before the face
         // loads there is nothing to measure against, and once it lands this
         // effect re-runs and resizes every text box.
@@ -300,7 +345,7 @@ export function StudioCanvas() {
     // because only the tree was checked.
     setRenderedCount(objects.size);
     canvas.requestRenderAll();
-  }, [nodes, fontsReady]);
+  }, [nodes, fontsReady, mode, cursor, rows]);
 
   // ---- selection: store → fabric ----------------------------------------
   useEffect(() => {
