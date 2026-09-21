@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* ============================================================================
    toke — theme layer
@@ -81,7 +81,7 @@
   --color-ok: var(--ok);
 
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", monospace;
 }
 
 /* Literal values, not `inline`, so Tailwind emits these as real custom
@@ -119,9 +119,9 @@ body {
    width as they change, which makes a cycling record counter jitter and a
    column of dimensions fail to align. */
 [data-numeric],
-input[type='number'] {
+input[type="number"] {
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
+  font-feature-settings: "tnum" 1;
 }
 
 /* One visible focus treatment, everywhere, on the accent. */

@@ -27,10 +27,18 @@
   "json": {
     "formatter": { "enabled": true }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "complexity": {
+        "noImportantStyles": "off"
+      },
       "correctness": {
         "noUnusedVariables": "error",
         "noUnusedImports": "error"

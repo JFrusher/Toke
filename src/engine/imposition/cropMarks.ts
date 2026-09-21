@@ -48,7 +48,7 @@ export function segmentBounds(mark: Mark): Rect {
  * Shortened rather than allowed to overflow, so a zero-margin sheet still
  * produces valid geometry instead of marks hanging off the page.
  */
-function availableLength(gap: Points): number {
+function availableLength(gap: number): number {
   return Math.max(0, Math.min(MARK_LENGTH, gap));
 }
 
