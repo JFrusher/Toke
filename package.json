@@ -13,7 +13,7 @@
 
     "test": "vitest run --project=unit",
     "test:watch": "vitest --project=unit",
-    "test:pdf": "vitest run --project=golden",
+    "test:pdf": "vitest run --project=golden --passWithNoTests",
     "test:e2e": "playwright test",
 
     "env:pull": "vercel env pull .env.local",
