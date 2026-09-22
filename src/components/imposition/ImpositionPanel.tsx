@@ -8,9 +8,10 @@ import { designSpec, SHEET_PRESETS, sheetPreset } from '@/engine/imposition/spec
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { useImpositionStore } from '@/engine/store/useImpositionStore';
+import { useShellStore } from '@/engine/store/useShellStore';
 import { formatNumber } from '@/engine/units/format';
 import { parseLength } from '@/engine/units/parse';
-import type { Points } from '@/engine/units/types';
+import type { DisplayUnit, Points } from '@/engine/units/types';
 import { points } from '@/engine/units/types';
 import { isErr, isOk } from '@/lib/result';
 
@@ -23,6 +24,7 @@ import { isErr, isOk } from '@/lib/result';
 export function ImpositionPanel() {
   const artboard = useCanvasStore((s) => s.artboard);
   const recordCount = useDataStore((s) => s.records.length);
+  const unit = useShellStore((s) => s.displayUnit);
 
   const preset = useImpositionStore((s) => s.preset);
   const orientation = useImpositionStore((s) => s.orientation);
@@ -81,8 +83,8 @@ export function ImpositionPanel() {
         ))}
       </fieldset>
 
-      <LengthField label="Margin" value={margin} onCommit={setMargin} />
-      <LengthField label="Bleed" value={bleed} onCommit={setBleed} />
+      <LengthField label="Margin" value={margin} unit={unit} onCommit={setMargin} />
+      <LengthField label="Bleed" value={bleed} unit={unit} onCommit={setBleed} />
 
       <label className="flex items-center gap-1.5 text-[13px] text-ink">
         <input
@@ -117,7 +119,7 @@ export function ImpositionPanel() {
             <Stat label="Waste" value={`${pagination.totalEmptyCells} cells`} />
             <Stat
               label="Trim"
-              value={`${formatNumber(points(artboard.width), 'mm')} x ${formatNumber(points(artboard.height), 'mm')}`}
+              value={`${formatNumber(points(artboard.width), unit)} x ${formatNumber(points(artboard.height), unit)}`}
             />
           </dl>
         </>
@@ -141,10 +143,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 function LengthField({
   label,
   value,
+  unit,
   onCommit,
 }: {
   label: string;
   value: number;
+  unit: DisplayUnit;
   onCommit: (next: Points) => void;
 }) {
   return (
@@ -153,14 +157,17 @@ function LengthField({
       <input
         data-numeric
         data-testid={`imposition-${label.toLowerCase()}`}
-        defaultValue={formatNumber(points(value), 'mm')}
+        // Keyed on the unit so switching mm to inches re-renders the field
+        // with the converted value rather than leaving the old number in place.
+        key={unit}
+        defaultValue={formatNumber(points(value), unit)}
         onBlur={(event) => {
-          const parsed = parseLength(event.target.value, 'mm');
+          const parsed = parseLength(event.target.value, unit);
           if (isOk(parsed)) onCommit(parsed.value);
         }}
         className="h-7 w-20 rounded-[2px] border border-border-control bg-panel-raised px-1.5 text-[13px] text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
       />
-      <span className="text-[11px] text-ink-muted">MM</span>
+      <span className="text-[11px] text-ink-muted uppercase">{unit}</span>
     </label>
   );
 }

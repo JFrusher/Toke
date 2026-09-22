@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
+import { useShellStore } from '@/engine/store/useShellStore';
 import { formatNumber } from '@/engine/units/format';
 import { parseLength } from '@/engine/units/parse';
 import type { DisplayUnit } from '@/engine/units/types';
@@ -9,7 +10,6 @@ import { points } from '@/engine/units/types';
 import { cn } from '@/lib/cn';
 import { isOk } from '@/lib/result';
 
-const UNIT: DisplayUnit = 'mm';
 const RADIANS_PER_DEGREE = Math.PI / 180;
 
 /**
@@ -23,17 +23,19 @@ function NumberField({
   label,
   value,
   suffix,
+  unit,
   onCommit,
   disabled,
 }: {
   label: string;
   value: number | null;
   suffix: string;
+  unit: DisplayUnit;
   onCommit: (next: number) => void;
   disabled?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const display = value === null ? '—' : formatNumber(points(value), UNIT);
+  const display = value === null ? '—' : formatNumber(points(value), unit);
 
   useEffect(() => {
     setDraft(null);
@@ -41,7 +43,7 @@ function NumberField({
 
   function commit(raw: string) {
     setDraft(null);
-    const parsed = parseLength(raw, UNIT);
+    const parsed = parseLength(raw, unit);
     if (isOk(parsed)) onCommit(parsed.value);
   }
 
@@ -80,8 +82,25 @@ export function TransformFields() {
   const nodes = useCanvasStore((s) => s.nodes);
   const selection = useCanvasStore((s) => s.selection);
   const replaceNodes = useCanvasStore((s) => s.replaceNodes);
+  const unit = useShellStore((s) => s.displayUnit);
+  const live = useCanvasStore((s) => s.liveTransform);
 
-  const selected = nodes.filter((node) => selection.includes(node.id));
+  const selected = nodes
+    .filter((node) => selection.includes(node.id))
+    // VER-5: while an object is being dragged or resized the fields read its
+    // live geometry, so they track the gesture instead of jumping at the end.
+    // The node itself is untouched until the gesture commits.
+    .map((node) =>
+      live !== null && live.id === node.id
+        ? {
+            ...node,
+            x: points(live.x),
+            y: points(live.y),
+            width: points(live.width),
+            height: points(live.height),
+          }
+        : node,
+    );
 
   /** Mixed values read as an em dash rather than showing the first object's
    *  number, which would look editable and be wrong. */
@@ -111,28 +130,32 @@ export function TransformFields() {
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         <NumberField
           label="X"
-          suffix="mm"
+          suffix={unit}
+          unit={unit}
           disabled={disabled}
           value={shared((n) => n.x)}
           onCommit={(next) => apply((node) => ({ ...node, x: points(next) }), 'Set X')}
         />
         <NumberField
           label="Y"
-          suffix="mm"
+          suffix={unit}
+          unit={unit}
           disabled={disabled}
           value={shared((n) => n.y)}
           onCommit={(next) => apply((node) => ({ ...node, y: points(next) }), 'Set Y')}
         />
         <NumberField
           label="W"
-          suffix="mm"
+          suffix={unit}
+          unit={unit}
           disabled={disabled}
           value={shared((n) => n.width)}
           onCommit={(next) => apply((node) => ({ ...node, width: points(next) }), 'Set width')}
         />
         <NumberField
           label="H"
-          suffix="mm"
+          suffix={unit}
+          unit={unit}
           disabled={disabled}
           value={shared((n) => n.height)}
           onCommit={(next) => apply((node) => ({ ...node, height: points(next) }), 'Set height')}

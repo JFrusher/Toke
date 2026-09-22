@@ -1,16 +1,22 @@
 # toke — outstanding work register
 
-Everything deliberately deferred, left incomplete against a plan acceptance
-criterion, or claimed-but-unverified during Phases 0–3.
+Everything left incomplete against a plan acceptance criterion, or
+claimed-but-unverified, across Phases 0–9 and the work since.
 
 Maintained alongside [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The plan
 says what the phases are; this file says what they did not deliver. Add an
 entry the moment something is skipped — a deferral that lives only in a commit
 message is a deferral nobody will find.
 
-Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
+Sections 1–6 are work. **Section 7 is not**: it holds choices that were
+considered and declined, so they stop reading as debt and nobody rediscovers
+them as problems.
 
-Last audited: 2026-09-22, after the brand, tutorial and photo-import work on top of v0.1.0.
+Status: `OPEN` · `BLOCKED` (needs another task first) · `CLOSED` (with what
+closed it) · `DONE`
+
+Last audited: 2026-09-22, against the code at v0.2.0. Entries closed by later work are
+marked CLOSED with what closed them; deliberate choices live in §7 rather than here.
 
 ---
 
@@ -33,29 +39,40 @@ The viewport exposes `data-fabric-objects`, so browser tests can assert what
 Fabric actually holds rather than what the tree claims. Two regression tests
 cover place/undo and group/ungroup.
 
-### DEF-2 · Canvas text edits may not reach the store · OPEN · medium
-Double-clicking an `IText` enters Fabric's editor. `commitFromFabric` reads
-`object.text` on `object:modified`, but Fabric emits `text:changed` and
-`editing:exited` for text edits and it is unverified that `object:modified`
-fires at all.
+### DEF-2 · Canvas text edits may not reach the store · CLOSED · not a defect
+Investigated and disproved. `object:modified` does fire when Fabric's text
+editor is exited, `commitFromFabric` reads `object.text`, and the edit reaches
+the scene node — which is what the PDF renders.
 
-- **Accept:** double-click a text object, type, click away; the new string
-  survives an undo/redo round trip and appears in the layers tree.
+Two things the investigation turned up that were worth writing down:
+
+- Fabric enters editing on a click against an **already-selected** text
+  object, not on a double-click. A text node is placed with its top-left at
+  the click point, so clicking that same point again lands on the top-left
+  resize handle: the object never sees a mousedown and never enters editing.
+- Keystrokes typed while no editor is open reach the window shortcut handler,
+  so "Rectangle" would switch tools four times. `isTextEntry` already guards
+  this once Fabric's textarea exists.
+
+Covered by `e2e/textedit.spec.ts`: entering the editor, the edit reaching the
+node, an undo/redo round trip, and that typing does not fire tool shortcuts.
 
 ---
 
 ## 2. Blocked on a later phase
 
 ### BLK-1 · Image tool · CLOSED
-**Unblocked by P4.1 and P8.4** — the asset store is content-addressed and the
-PDF renderer now embeds PNG/JPEG from bytes handed to it on the export job.
-Still needs: a file input on the toolbar, `FabricImage` construction from
-`objectUrlFor`, retain/release wired to node add/delete, and asset bytes
-collected into `packProject` (currently hardcoded to an empty array in
-`FileMenu.buildBytes`).
+The asset store is content-addressed, the PDF renderer embeds PNG/JPEG from
+bytes handed to it on the export job, and the UI is built: a file input on the
+toolbar (`ImageImport.tsx`), `FabricImage` construction from `objectUrlFor`,
+retain wired to node creation, and asset bytes collected into `packProject`.
 
-- **Accept:** upload an image, place it, resize it; the asset survives a
-  `.toke` save/open round trip; two placements of the same file store one blob.
+Verified end to end in `e2e/images.spec.ts`: place, resize, choose a fit mode,
+export a PDF carrying one image XObject for the whole sheet, and reopen a
+saved `.toke` with the image intact.
+
+Two follow-ons remain open under their own entries — INC-34 (no crop
+rectangle) and INC-35 (no aspect lock on resize).
 
 ### BLK-2 · Pen / path tool · OPEN (unblocked) · from P3.4
 **Unblocked by P8.2** — `renderNode` now draws a `PathNode` via `drawSvgPath`.
@@ -82,26 +99,54 @@ Errors currently surface as one-off `role="alert"` paragraphs. Every
 These were signed off as phase-complete with parts missing. Each names the
 criterion it fails.
 
-### INC-1 · Rulers · OPEN · P3.3
+### INC-1 · Rulers · CLOSED
 > "Rulers in the active display unit with a live cursor indicator. Ruler ticks
 > stay legible from 10% to 1600% (adaptive subdivision)."
 
-`CanvasRulers.tsx` was never written. Zoom, pan and fit all work; the rulers do
-not exist.
+Built. Tick placement lives in `engine/canvas/ruler.ts` and is pure, so the
+legibility claim is proved by arithmetic across all three units and ten zoom
+levels rather than eyeballed: a labelled tick always has 56px, a subdivision
+always has 6px, and the step ladder is monotonic so zooming in never jumps to
+a coarser step.
 
-### INC-2 · Guides cannot be created · OPEN · P3.7
-The snapping engine is complete and tested, `guides` lives in the store and
-`addGuide` exists — but nothing calls it. There is no drag-from-ruler
-interaction (blocked by INC-1) and no guide rendering.
+Steps are chosen in the DISPLAY unit, not in points — a millimetre ruler must
+land on whole millimetres, and inches subdivide in halves down to sixteenths
+rather than the decimal 1-2-5 run.
 
-Also missing from the same criterion:
-- **Snap indicators** — `snap()` returns `matches`; nothing draws them.
-- **Ctrl suspends snapping** — only the toolbar checkbox toggles it.
+The drawing area is inset by the rulers rather than overlaid by them, so
+nothing can hide underneath where it cannot be clicked. This shifted the fit
+zoom, which in turn broke two e2e specs that assumed fixed pixel offsets —
+both now derive their clicks from the live zoom.
 
-### INC-3 · Pan by space-drag and middle-drag · OPEN · P3.3
+Unblocks INC-2: drag-from-ruler is the missing half of guide creation.
+
+### INC-2 · Guides cannot be created · CLOSED
+All three parts built now INC-1 unblocked the first.
+
+- **Drag from a ruler** creates a guide on the matching axis.
+- **Snap indicators** are drawn from the `matches` that `snap()` has always
+  returned and nothing ever showed — the canvas snapped silently.
+- **Ctrl suspends snapping** for the duration of a drag, which is how you
+  place something a hair off a guide deliberately.
+
+Guides are an SVG overlay, not Fabric objects: they must never reach the scene
+graph and therefore the PDF, must not be snap targets for themselves, and
+keeping them out preserves the one-to-one Fabric↔scene mapping the sync
+depends on. They are not pushed onto the history stack either — scaffolding
+the user puts up and takes down would bury the edits that matter.
+
+The lines are SVG but the hit targets are real buttons: a 1px line is not
+something anyone can click, and an SVG element with a click handler is
+pointer-only, where §4.7 wants keyboard removal too.
+
+### INC-3 · Pan by space-drag and middle-drag · CLOSED
 > "space-drag and middle-drag pan"
 
-Only wheel/trackpad pan is implemented.
+Both built. Space-drag sets `skipTargetFind` as well as clearing `selection`,
+so a drag that starts over an object pans rather than selecting it — without
+that the gesture only worked on empty pasteboard, which is where it is least
+needed. Space is ignored while typing, and the held state is released on
+window blur so alt-tabbing mid-drag cannot leave the canvas stuck in pan mode.
 
 ### INC-4 · Layers panel is read-only · OPEN · P3.10
 > "Reorder by drag, rename, toggle visibility/lock, select."
@@ -132,14 +177,17 @@ edit the file. Missing:
 - per-column type override
 - import progress indicator
 
-### INC-8 · Record source has no UI · OPEN · P2.5
-`runRecordSource` and `columnSchemaFor` are built and tested but are called
-from nowhere. Needed before P6 can bind anything.
+### INC-8 · Record source has no UI · CLOSED by P9.3
+`runRecordSource` and `columnSchemaFor` were built and tested but called from
+nowhere. The SQL console now drives them: `SqlConsole.tsx` runs any read-only
+query and "Use as record source" hands it to `setRecordSource`.
 
-### INC-9 · Align and distribute have no keyboard shortcuts · OPEN · P3.8
-Toolbar buttons only. CLAUDE.md §4.7 commits to full keyboard operation.
+### INC-9 · Align and distribute have no keyboard shortcuts · CLOSED
+Ctrl+Shift+L/C/R and T/M/B align; Ctrl+Shift+H and V distribute. Ctrl+[ and
+Ctrl+] reorder within the stack, with Shift for front and back. All listed in
+the shortcut reference, since an undiscoverable shortcut is one nobody uses.
 
-### INC-10 · Nudge is not coalesced in history · OPEN · P3.9
+### INC-10 · Nudge is not coalesced in history · CLOSED
 > "A drag is one entry, not one per mousemove."
 
 Fabric emits `object:modified` once per drag, so **drags are fine**. Held
@@ -147,8 +195,10 @@ arrow keys are not: each keypress pushes its own history entry, so nudging an
 object ten steps costs ten undos. `coalesceKey` is implemented and tested in
 the history module but no call site passes one.
 
-- **Fix:** pass a `coalesceKey` such as `nudge:<selection-ids>` from
-  `useCanvasStore.nudge`.
+**Fixed.** `nudge` passes `nudge:<selection-ids>`, so a run of arrow presses is
+one history entry and changing the selection starts a new one. Covered in
+`engine/store/nudge.test.ts`, including that a nudge does not merge into the
+placement before it.
 
 ### INC-11 · Assets and fonts are not collected into a save · PARTLY CLOSED
 Assets now travel inside the `.toke` and into the export job; a saved project
@@ -156,11 +206,6 @@ with an image reopens with the image. Fonts still do not: v1 ships one family
 and bundles it, so carrying ~218KB per face in every project file would buy
 nothing. Revisit with custom font upload.
 
-### INC-12 · Save always downloads a new file · OPEN · P4.3
-No File System Access API, so "Save" cannot overwrite the file the user
-opened — every save produces another download. Deliberate: FSA is
-Chromium-only and cannot be driven from a test. Revisit if repeated saving
-becomes annoying in practice.
 
 ### INC-13 · Multi-design projects cannot be created or switched · OPEN · P4.2
 The format stores `designs` as an array and round-trips several, but
@@ -184,10 +229,6 @@ metrics are byte-identical to the WOFF first (zero delta across all three
 faces), so the P5.3 agreement still holds — and now the SAME file is measured,
 served to the browser and embedded in the PDF. @fontsource removed.
 
-### INC-17 · No text shaping · OPEN · accepted for v1
-`measureText` sums advance widths from `font.layout()`. That covers Latin with
-kerning, which CLAUDE.md §8 scopes v1 to. Ligatures, contextual alternates and
-any complex script will measure and render incorrectly.
 
 ### INC-18 · Record source is still the raw guests table · DONE · 2026-09-21
 **Fixed in P7.1.** `useDataStore` now holds `recordSource`, `records` and
@@ -203,10 +244,11 @@ The canvas draws a rust outline and pre-flight lists every affected record,
 but the binding panel itself does not say the currently previewed record
 overflows.
 
-### INC-21 · No record-source editor · OPEN · P7.1, P9.3
-The store supports any read-only query, but nothing lets a user write one —
-a design cannot yet print only accepted guests. Needs the SQL console (P9.3)
-or a simpler filter control.
+### INC-21 · No record-source editor · CLOSED by P9.3
+The SQL console is the editor. A design can print only accepted guests by
+running the filter and pressing "Use as record source"; the templates ship
+with exactly that query. A simpler filter control on top of it remains
+possible but is no longer blocking anything.
 
 ### INC-22 · Pre-flight does not check images or fonts · OPEN · P7.3
 > "Report per-record: text overflow, unresolved tokens, missing assets."
@@ -230,10 +272,6 @@ mid-render. Subsetting makes the embedded cost near-zero, but the postMessage
 copy is ~218KB per face. Narrow to referenced faces once the scene records
 which it uses.
 
-### INC-25 · Export cancellation is per-sheet, not immediate · KNOWN · P8.8
-`shouldCancel` is checked between sheets. A 50-up sheet takes tens of
-milliseconds, so the delay is imperceptible; finer granularity would mean
-threading a signal through every draw call. Deliberate.
 
 ### INC-26 · Export has no memory ceiling · OPEN · P8.8
 The plan's budget is 500 records under 30s and under 1GB. The 30s half is
@@ -264,30 +302,12 @@ Fit, Fill and Stretch against the frame, with the frame resizable. There is no
 drag-a-crop-box-over-the-image interaction and no pan-within-frame. Adding one
 means a `cropRect` on `ImageNode` and a `.toke` schemaVersion bump.
 
-### INC-35 · Image resize does not lock aspect · OPEN
-The frame resizes freely; with Fit or Fill the picture stays undistorted
-inside it, but Stretch will distort and nothing warns. A Shift-drag aspect
-lock on the canvas handles is the fix.
+### INC-35 · Image resize does not lock aspect · CLOSED
+Shift-drag on a corner handle locks the aspect ratio, for every object rather
+than only images. Fabric's default was the other way round — corners preserved
+aspect and Shift freed them — which is backwards from every design tool and
+silently distorted a Stretch-fit photo.
 
-### INC-36 · Mascot artwork is raster, not vector · KNOWN
-The six Tokey states are ~110KB PNGs at ~320px square, which is fine at the
-48-112px they render at but will not survive a larger use. The brace mark IS
-vector. Redraw the character as SVG only if it ever needs to be large.
-
-### INC-28 · SQL console highlighting has no parser · KNOWN · P9.3
-Token-level colouring over a transparent textarea. A keyword inside an
-unterminated string still colours, and there is no bracket matching or
-completion. Deliberate: the alternative is CodeMirror 6 and its dependency
-tree for features the console does not need. Revisit only if the console grows
-into an editor people write long queries in.
-
-### INC-29 · Templates are TypeScript, not .toke files · KNOWN · P9.4
-The plan specified `public/templates/*.toke`. A .toke carries a complete
-SQLite file, so shipping one needs a build step running sql.js to produce a
-binary that drifts whenever the schema changes. Declaring the design in
-`engine/templates/templates.ts` and importing the roster through the normal
-CSV path is typechecked and exercises the real user path. Revisit if templates
-ever need to carry assets or multiple designs.
 
 ### INC-30 · Font weight 500 is not bundled · CLOSED
 Worse than recorded. `getFont` fell back to the nearest loaded face, so
@@ -358,23 +378,30 @@ never been checked, and that is the case most likely to diverge.
 from a large project has never been produced. Worth a test that fills the
 store.
 
-### VER-5 · Numeric fields during a live drag · OPEN · P3.6
+### VER-5 · Numeric fields during a live drag · CLOSED
 > "Values update live during canvas drag without fighting user input
 > mid-edit."
 
-Fields update on `object:modified` (drag end), not during the drag. The
-"without fighting input" half is satisfied; the "live" half is not.
+Both halves hold now. The canvas publishes a `liveTransform` during a move or
+scale which the inspector prefers over the scene node, so the fields track the
+gesture. It is deliberately NOT the scene graph: writing every mousemove into
+`nodes` would push a command per frame and re-run the store→Fabric sync
+against the object the user is holding.
+
+Asserted mid-gesture with the mouse still down, plus that the committed value
+matches what the drag showed and that a whole drag is still one undo.
 
 ---
 
 ## 5. Environment and infrastructure
 
-### ENV-1 · No git remote · OPEN · **blocks CI**
-`.github/workflows/ci.yml` has never executed. The workflow is valid YAML with
-2 jobs and 17 steps, but validity is not the same as passing.
+### ENV-1 · CI has never been observed green · OPEN
+The remote exists and `main`, `staging` and both tags are pushed, so the
+blocking half of this is gone. `.github/workflows/ci.yml` is valid YAML with
+2 jobs and 17 steps, but validity is not the same as passing and no run has
+been watched.
 
-- Needed: `git remote add origin …`, push `main` and `staging`, confirm the
-  first run is green.
+- Needed: confirm the first run is green and fix whatever it finds.
 - Until then every "all gates pass" claim rests on local runs only.
 
 ### ENV-2 · Vercel CLI not installed · OPEN
@@ -396,9 +423,6 @@ will not attribute. Cheap to fix now, annoying later.
 DEVELOPMENT.md §5.6 specifies protecting `main` and `staging`. Until set, the
 branching model is a convention rather than a rule.
 
-### ENV-6 · Caveman statusline badge · OPEN · cosmetic
-Plugin ships a statusline showing the active mode; not wired into
-`~/.claude/settings.json`.
 
 ---
 
@@ -410,11 +434,15 @@ Either gate it behind `NEXT_PUBLIC_VERCEL_ENV !== 'production'` or accept it
 deliberately and say so in CLAUDE.md.
 
 ### DOC-2 · CLAUDE.md §2.2 directory map is aspirational · OPEN
-It lists components that do not exist: `CanvasRulers`, `Guides`,
-`RecordSourcePanel`, `SqlConsole`, `InspectorPanel`, `TypographyPanel`,
-`AppShell`, `CycleBar`, and the whole `components/preview/` and
-`components/imposition/` trees. Fine as a target, misleading as a map — mark
-which parts are built.
+Less wrong than it was: `AppShell`, `CycleBar`, `SqlConsole` and the whole
+`components/preview/` and `components/imposition/` trees now exist.
+
+Still listed and still absent: `CanvasRulers`, `Guides` (both INC-1/INC-2),
+`RecordSourcePanel`, `InspectorPanel`, `TypographyPanel`. The map also omits
+components that do exist — `ImageImport`, `TutorialPanel`, `DiagnosticsPanel`,
+`ResizeHandle`, `components/brand/`.
+
+Fine as a target, misleading as a map — mark which parts are built.
 
 ### DOC-3 · `components/ui/` is not "retuned Shadcn" · OPEN · low
 CLAUDE.md §4.5 describes retuning Shadcn primitives. No Shadcn is installed:
@@ -422,9 +450,14 @@ CLAUDE.md §4.5 describes retuning Shadcn primitives. No Shadcn is installed:
 That was a deliberate call recorded in §7, but §4.5 still reads as though a
 component library is in use.
 
-### DOC-4 · Unused `fixtures/` images · OPEN · low
-Ten images committed in `f48735b`. Nothing references them. Confirm whether
-they are for P9.4 templates or P4.1 asset-store tests, or drop them.
+### DOC-4 · `fixtures/` images are unreferenced masters · OPEN · low
+Ten images committed in `f48735b`. Six are now the brand artwork, copied into
+`public/brand/` and served from there; the wordmark and favicon were redrawn
+as SVG rather than used directly. Nothing imports `fixtures/` itself.
+
+Decide: keep as the source masters the served copies derive from — and say so
+in a short note — or drop them, since they are only recoverable from history
+afterwards.
 
 ### DOC-5 · `useDataStore` re-exports `isOk` · OPEN · trivial
 A leftover convenience export from a store module. Import from `@/lib/result`
@@ -432,9 +465,41 @@ and remove.
 
 ---
 
-## 7. Known and accepted — no action
+## 7. Decisions — considered and declined
 
-Recorded so they are not rediscovered as problems.
+Recorded so they are not rediscovered as problems. Each was considered and
+declined on the merits — they are choices, not debt.
+
+### Deliberate scope limits
+
+- **INC-12 · Save always downloads a new file.** The File System Access API
+  could overwrite the opened file, but it is Chromium-only and cannot be
+  driven from a test. Revisit if repeated saving becomes annoying in practice.
+- **INC-17 · No text shaping.** `measureText` sums advance widths from
+  `font.layout()`, which covers Latin with kerning — the scope CLAUDE.md §8
+  sets for v1. Ligatures, contextual alternates and complex scripts will
+  measure and render incorrectly. Fixing it means HarfBuzz.
+- **INC-25 · Export cancellation is per-sheet.** `shouldCancel` is checked
+  between sheets; a sheet takes tens of milliseconds, so the delay is
+  imperceptible. Finer granularity means threading a signal through every draw
+  call.
+- **INC-28 · SQL console highlighting has no parser.** Token-level colouring
+  over a transparent textarea, so a keyword inside an unterminated string
+  still colours. The alternative is CodeMirror 6 and its dependency tree for
+  bracket matching and completion the console does not need. Revisit only if
+  people start writing long queries in it.
+- **INC-29 · Templates are TypeScript, not `.toke` files.** A `.toke` carries a
+  complete SQLite file, so shipping one needs a build step running sql.js to
+  produce a binary that drifts whenever the schema changes. Declaring the
+  design in `engine/templates/templates.ts` and importing the roster through
+  the normal CSV path is typechecked and exercises the real user path.
+- **INC-36 · Mascot artwork is raster.** Six ~110KB PNGs at ~320px, rendered at
+  48–112px. The brace mark IS vector. Redraw the character only if it ever
+  needs to be large.
+- **ENV-6 · Caveman statusline badge.** A local tooling preference, not a
+  property of this project.
+
+### Library and platform choices
 
 - **`pdf-lib` is unmaintained** (1.17.1, ~4 years old). Deliberate: used as a
   low-level writer under our own renderer. CLAUDE.md §7.

@@ -5,7 +5,9 @@ import { CycleBar } from '@/components/preview/CycleBar';
 import { Button } from '@/components/ui/Button';
 import type { AlignEdge } from '@/engine/canvas/arrange';
 import { type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
+import { useShellStore } from '@/engine/store/useShellStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
+import { DISPLAY_UNITS, type DisplayUnit } from '@/engine/units/types';
 import { cn } from '@/lib/cn';
 
 const TOOLS: readonly { id: Tool; label: string; key: string }[] = [
@@ -30,6 +32,8 @@ export function CanvasToolbar({ onPreflight }: { onPreflight: () => void }) {
   const setTool = useCanvasStore((s) => s.setTool);
   const zoom = useCanvasStore((s) => s.zoom);
   const setZoom = useCanvasStore((s) => s.setZoom);
+  const unit = useShellStore((s) => s.displayUnit);
+  const setUnit = useShellStore((s) => s.setDisplayUnit);
   const canUndo = useCanvasStore((s) => s.canUndo);
   const canRedo = useCanvasStore((s) => s.canRedo);
   const undo = useCanvasStore((s) => s.undo);
@@ -183,6 +187,25 @@ export function CanvasToolbar({ onPreflight }: { onPreflight: () => void }) {
             className="accent-accent"
           />
           Snap
+        </label>
+
+        <span className="h-5 w-px bg-hairline-strong" />
+
+        {/* Beside the zoom, because both answer "how big is this really?" */}
+        <label className="flex items-center gap-1">
+          <span className="sr-only">Display unit</span>
+          <select
+            value={unit}
+            onChange={(event) => setUnit(event.target.value as DisplayUnit)}
+            data-testid="display-unit"
+            className="h-7 rounded-[2px] border border-border-control bg-panel-raised px-1 text-[11px] text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+          >
+            {DISPLAY_UNITS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
 
         <span className="h-5 w-px bg-hairline-strong" />

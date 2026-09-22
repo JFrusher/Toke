@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { type DisplayUnit, isDisplayUnit } from '@/engine/units/types';
 
 /**
  * Panel sizes and which bottom tab is showing.
@@ -24,6 +25,14 @@ type Persisted = {
   readonly bottomTab: BottomTab;
   /** -1 once dismissed; the tutorial never reopens on its own after that. */
   readonly tutorialStep: number;
+  /**
+   * The unit every measurement is displayed in.
+   *
+   * Lives here rather than in the `.toke` file: someone who works in inches
+   * works in inches whatever they open, and carrying it in the document would
+   * mean a colleague's project silently switches your rulers.
+   */
+  readonly displayUnit: DisplayUnit;
 };
 
 const DEFAULTS: Persisted = {
@@ -34,6 +43,7 @@ const DEFAULTS: Persisted = {
   rightOpen: true,
   bottomOpen: false,
   bottomTab: 'data',
+  displayUnit: 'mm',
   // Closed by default. It opens when someone loads the tutorial template,
   // which is an explicit choice rather than something that happens to them.
   tutorialStep: -1,
@@ -59,7 +69,10 @@ function load(): Persisted {
     const raw = window.localStorage.getItem(KEY);
     if (raw === null) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<Persisted>;
-    return { ...DEFAULTS, ...parsed };
+    const merged = { ...DEFAULTS, ...parsed };
+    // Validated rather than trusted: this is browser storage, and an unknown
+    // unit would format every measurement as NaN.
+    return isDisplayUnit(merged.displayUnit) ? merged : { ...merged, displayUnit: 'mm' };
   } catch {
     return DEFAULTS;
   }
@@ -81,6 +94,7 @@ type ShellState = Persisted & {
   toggleLeft: () => void;
   toggleRight: () => void;
   setBottomTab: (tab: BottomTab) => void;
+  setDisplayUnit: (unit: DisplayUnit) => void;
   toggleBottom: () => void;
   startTutorial: () => void;
   setTutorialStep: (step: number) => void;
@@ -108,6 +122,7 @@ export const useShellStore = create<ShellState>((set, get) => {
       bottomOpen,
       bottomTab,
       tutorialStep,
+      displayUnit,
     } = get();
     save({
       leftWidth,
@@ -118,6 +133,7 @@ export const useShellStore = create<ShellState>((set, get) => {
       bottomOpen,
       bottomTab,
       tutorialStep,
+      displayUnit,
     });
   }
 
@@ -130,6 +146,7 @@ export const useShellStore = create<ShellState>((set, get) => {
     toggleLeft: () => persist({ leftOpen: !get().leftOpen }),
     toggleRight: () => persist({ rightOpen: !get().rightOpen }),
     setBottomTab: (bottomTab) => persist({ bottomTab, bottomOpen: true }),
+    setDisplayUnit: (displayUnit) => persist({ displayUnit }),
     toggleBottom: () => persist({ bottomOpen: !get().bottomOpen }),
 
     startTutorial: () => persist({ tutorialStep: 0 }),

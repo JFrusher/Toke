@@ -2,7 +2,9 @@
 
 import * as fabric from 'fabric';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { snap, snapTargets } from '@/engine/canvas/snapping';
+import { CanvasGuides } from '@/components/canvas/CanvasGuides';
+import { CanvasRulers, RULER_SIZE, useCursorPosition } from '@/components/canvas/CanvasRulers';
+import { type SnapMatch, snap, snapTargets } from '@/engine/canvas/snapping';
 import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
@@ -16,6 +18,7 @@ import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
 import { measureText } from '@/engine/text/measure';
 import { renderTextNode, type StudioMode } from '@/engine/tokens/render';
 import { points } from '@/engine/units/types';
+import { isTypingTarget } from '@/lib/dom';
 import { isOk } from '@/lib/result';
 
 /**
@@ -294,6 +297,15 @@ export function StudioCanvas() {
    *  does not immediately overwrite what the user is dragging. */
   const fromFabric = useRef(false);
   const [renderedCount, setRenderedCount] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // `pointer`, not `cursor`: the record cursor already owns that name here.
+  const pointer = useCursorPosition(containerRef);
+  /** Held space turns a left-drag into a pan, as it does in every design tool. */
+  const spaceHeld = useRef(false);
+  const [spacePanning, setSpacePanning] = useState(false);
+  /** Held Ctrl suspends snapping. A ref, because it is read inside a Fabric handler. */
+  const suspendSnap = useRef(false);
+  const [snapMatches, setSnapMatches] = useState<readonly SnapMatch[]>([]);
   const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
@@ -377,6 +389,9 @@ export function StudioCanvas() {
     const host = container;
     function resize() {
       canvas.setDimensions({ width: host.clientWidth, height: host.clientHeight });
+      // Mirrored into state so the rulers span exactly the drawing area; they
+      // sit outside it and cannot read the Fabric canvas themselves.
+      setSize({ width: host.clientWidth, height: host.clientHeight });
       canvas.requestRenderAll();
     }
     resize();
@@ -536,6 +551,11 @@ export function StudioCanvas() {
     }
 
     function onModified() {
+      // Indicators belong to the gesture; leaving them up afterwards would
+      // draw lines through artwork that is no longer moving.
+      setSnapMatches([]);
+      // The committed node is the source of truth again.
+      useCanvasStore.getState().setLiveTransform(null);
       commitFromFabric('Transform object');
     }
 
@@ -563,10 +583,43 @@ export function StudioCanvas() {
       const result = snap(live, targets, {
         threshold: SNAP_THRESHOLD_PX,
         zoom: store.zoom,
-        enabled: store.snapEnabled,
+        // Ctrl suspends snapping for the duration of a drag, which is how
+        // every layout tool lets you place something a hair off a guide.
+        enabled: store.snapEnabled && !suspendSnap.current,
       });
 
       target.set({ left: result.rect.x, top: result.rect.y });
+      // Drawn by the overlay: `matches` has always been returned and nothing
+      // ever showed it, so the canvas snapped silently.
+      setSnapMatches(result.matches);
+
+      // VER-5: the inspector reads this so its fields track the drag. It is
+      // not the scene graph, so no history entry is pushed per mousemove.
+      store.setLiveTransform({
+        id: movingId,
+        x: result.rect.x,
+        y: result.rect.y,
+        width: result.rect.width,
+        height: result.rect.height,
+      });
+    }
+
+    /** Live geometry while a corner handle is dragged. */
+    function onScaling(event: { target?: fabric.FabricObject }) {
+      const target = event.target;
+      if (target === undefined) return;
+
+      for (const [id, object] of objectsRef.current) {
+        if (object !== target) continue;
+        useCanvasStore.getState().setLiveTransform({
+          id,
+          x: target.left ?? 0,
+          y: target.top ?? 0,
+          width: (target.width ?? 0) * (target.scaleX ?? 1),
+          height: (target.height ?? 0) * (target.scaleY ?? 1),
+        });
+        return;
+      }
     }
 
     function onWheel(event: { e: WheelEvent }) {
@@ -582,22 +635,124 @@ export function StudioCanvas() {
       store.setPan(store.panX - event.e.deltaX, store.panY - event.e.deltaY);
     }
 
+    /**
+     * Space-drag and middle-drag pan.
+     *
+     * Both are the conventional gestures and neither existed — only the wheel
+     * did, which is unusable on a mouse without horizontal scroll. Held space
+     * suspends selection so the drag pans instead of marquee-selecting.
+     */
+    let panning: { x: number; y: number } | null = null;
+    // Captured after the null guard above: TypeScript loses the narrowing
+    // across a function declaration boundary.
+    const surface = canvas;
+
+    function beginPan(event: { e: MouseEvent | TouchEvent }) {
+      const native = event.e;
+      if (!(native instanceof MouseEvent)) return false;
+
+      // Middle button, or left button while space is held.
+      const wants = native.button === 1 || (spaceHeld.current && native.button === 0);
+      if (!wants) return false;
+
+      native.preventDefault();
+      panning = { x: native.clientX, y: native.clientY };
+      surface.setCursor('grabbing');
+      return true;
+    }
+
+    function onPanMove(event: { e: MouseEvent | TouchEvent }) {
+      if (panning === null) return;
+      const native = event.e;
+      if (!(native instanceof MouseEvent)) return;
+
+      const store = useCanvasStore.getState();
+      store.setPan(
+        store.panX + (native.clientX - panning.x),
+        store.panY + (native.clientY - panning.y),
+      );
+      panning = { x: native.clientX, y: native.clientY };
+    }
+
+    function endPan() {
+      panning = null;
+    }
+
+    canvas.on('mouse:down:before', beginPan);
+    canvas.on('mouse:move', onPanMove);
+    canvas.on('mouse:up', endPan);
+
     canvas.on('selection:created', onSelection);
     canvas.on('selection:updated', onSelection);
     canvas.on('selection:cleared', onSelection);
     canvas.on('object:modified', onModified);
     canvas.on('object:moving', onMoving);
+    canvas.on('object:scaling', onScaling);
     canvas.on('mouse:wheel', onWheel);
 
     return () => {
+      canvas.off('mouse:down:before', beginPan);
+      canvas.off('mouse:move', onPanMove);
+      canvas.off('mouse:up', endPan);
       canvas.off('selection:created', onSelection);
       canvas.off('selection:updated', onSelection);
       canvas.off('selection:cleared', onSelection);
       canvas.off('object:modified', onModified);
       canvas.off('object:moving', onMoving);
+      canvas.off('object:scaling', onScaling);
       canvas.off('mouse:wheel', onWheel);
     };
   }, [commitFromFabric]);
+
+  // ---- space-to-pan ------------------------------------------------------
+  useEffect(() => {
+    function onDown(event: KeyboardEvent) {
+      // Not while typing: space belongs to the text, and Fabric's editor is a
+      // real textarea.
+      if (event.key === 'Control' || event.key === 'Meta') suspendSnap.current = true;
+      if (event.code !== 'Space' || isTypingTarget(event.target)) return;
+      // Stops the page scrolling under the canvas on every space.
+      event.preventDefault();
+      spaceHeld.current = true;
+      setSpacePanning(true);
+    }
+
+    function onUp(event: KeyboardEvent) {
+      if (event.key === 'Control' || event.key === 'Meta') suspendSnap.current = false;
+      if (event.code !== 'Space') return;
+      spaceHeld.current = false;
+      setSpacePanning(false);
+    }
+
+    // Released on blur as well: alt-tabbing away mid-drag would otherwise
+    // leave the canvas stuck in pan mode with no key to let go of.
+    function onBlur() {
+      spaceHeld.current = false;
+      suspendSnap.current = false;
+      setSpacePanning(false);
+    }
+
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
+  // While space is held the canvas must not marquee-select under the drag.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
+    canvas.selection = !spacePanning && useCanvasStore.getState().tool === 'select';
+    // skipTargetFind as well as selection: without it a space-drag that starts
+    // over an object selects that object instead of panning, so the gesture
+    // only works on empty pasteboard — which is where it is least needed.
+    canvas.skipTargetFind = spacePanning;
+    canvas.defaultCursor = spacePanning ? 'grab' : 'default';
+  }, [spacePanning]);
 
   // ---- placement tools ---------------------------------------------------
   useEffect(() => {
@@ -606,6 +761,12 @@ export function StudioCanvas() {
 
     canvas.selection = tool === 'select';
     canvas.defaultCursor = tool === 'select' ? 'default' : 'crosshair';
+
+    // INC-35. Fabric's default is the other way round — corners preserve
+    // aspect and Shift frees them — which is backwards from every design tool
+    // and silently distorts a Stretch-fit photo.
+    canvas.uniformScaling = false;
+    canvas.uniScaleKey = 'shiftKey';
 
     if (tool === 'select') return;
 
@@ -627,13 +788,24 @@ export function StudioCanvas() {
 
   return (
     <div
-      ref={containerRef}
       data-testid="canvas-viewport"
       data-fabric-objects={renderedCount}
       data-fonts-ready={fontsReady}
       className="relative h-full w-full overflow-hidden bg-pasteboard"
     >
-      <canvas ref={canvasElementRef} />
+      <CanvasRulers width={size.width} height={size.height} cursor={pointer} />
+
+      {/* Inset by the rulers rather than overlaid by them: an object hidden
+          under a ruler cannot be clicked, and the artboard must fit the space
+          that is actually drawable. */}
+      <div
+        ref={containerRef}
+        className="absolute right-0 bottom-0"
+        style={{ left: RULER_SIZE, top: RULER_SIZE }}
+      >
+        <canvas ref={canvasElementRef} />
+        <CanvasGuides width={size.width} height={size.height} matches={snapMatches} />
+      </div>
     </div>
   );
 }
