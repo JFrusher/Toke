@@ -150,7 +150,7 @@ export default function MeasureAgreement() {
         Canvas ⇄ fontkit measurement agreement
       </h1>
       <p style={{ color: 'var(--ink-muted)', margin: '0 0 16px', fontSize: 12 }}>
-        {rows.length} comparisons · 20 strings × 5 sizes × 3 faces. Tolerance {TOLERANCE}pt.
+        {rows.length} comparisons · 20 strings × 5 sizes × 4 faces. Tolerance {TOLERANCE}pt.
       </p>
 
       <p

@@ -2,6 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import { Tokey } from '@/components/brand/Tokey';
+import { Wordmark } from '@/components/brand/Wordmark';
 import { CanvasToolbar } from '@/components/canvas/CanvasToolbar';
 import { LayersPanel } from '@/components/canvas/LayersPanel';
 import { CsvImportDialog } from '@/components/data/CsvImportDialog';
@@ -9,6 +11,7 @@ import { DataGrid } from '@/components/data/DataGrid';
 import { SqlConsole } from '@/components/data/SqlConsole';
 import { ExportDialog } from '@/components/imposition/ExportDialog';
 import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
+import { ImageFitPanel } from '@/components/inspector/ImageFitPanel';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
 import { PreflightReport } from '@/components/preview/PreflightReport';
@@ -18,6 +21,7 @@ import { LiveAnnouncer } from '@/components/shell/LiveAnnouncer';
 import { ResizeHandle } from '@/components/shell/ResizeHandle';
 import { ShortcutReference } from '@/components/shell/ShortcutReference';
 import { TemplateGallery } from '@/components/shell/TemplateGallery';
+import { TutorialPanel } from '@/components/shell/TutorialPanel';
 import { Button } from '@/components/ui/Button';
 import { installDiagnosticsBridge } from '@/engine/store/diagnosticsBridge';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
@@ -76,6 +80,7 @@ export function AppShell() {
   const [shortcuts, setShortcuts] = useState(false);
 
   const isEmpty = useCanvasStore((s) => s.nodes.length === 0);
+  const tutorialStep = useShellStore((s) => s.tutorialStep);
 
   // After mount, not during render: the server has no localStorage, and a
   // first paint at the saved width followed by React's own would be the layout
@@ -88,7 +93,9 @@ export function AppShell() {
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-panel">
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-hairline-strong border-b px-3 py-2">
-        <h1 className="font-semibold text-[13px] tracking-tight">toke</h1>
+        <h1>
+          <Wordmark />
+        </h1>
         <FileMenu />
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -176,11 +183,16 @@ export function AppShell() {
                unbidden on load is in the way of anyone who knows what they
                are doing. */
             <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-6">
-              <div className="pointer-events-auto flex items-center gap-2 rounded-[4px] border border-hairline-strong bg-panel px-3 py-2">
-                <span className="text-[12px] text-ink-muted">Empty artboard.</span>
-                <Button onClick={() => setTemplates(true)} data-testid="empty-templates">
-                  Start from a template
-                </Button>
+              <div className="pointer-events-auto flex items-center gap-3 rounded-[4px] border border-hairline-strong bg-panel py-2 pr-3 pl-2">
+                <Tokey state="greeting" size="sm" className="shrink-0" />
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-ink-muted">
+                    Empty artboard. Trim 85 × 55mm.
+                  </span>
+                  <Button onClick={() => setTemplates(true)} data-testid="empty-templates">
+                    Start from a template
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -203,11 +215,13 @@ export function AppShell() {
               className="shrink-0 overflow-auto bg-panel"
             >
               <TransformFields />
+              <ImageFitPanel />
               <TokenBindingPanel />
               <ImpositionPanel />
             </aside>
           </>
         )}
+        {tutorialStep >= 0 && <TutorialPanel />}
       </div>
 
       {bottomOpen && (

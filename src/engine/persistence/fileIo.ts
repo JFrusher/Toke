@@ -4,7 +4,7 @@
  * Uses a download link and a file input rather than the File System Access
  * API. FSA is Chromium-only and its real advantage — saving over the same
  * file without a dialog — is an enhancement, not a requirement, and it cannot
- * be driven from a test. Recorded as an enhancement in tasks.todo.
+ * be driven from a test. Recorded as an enhancement in scratch/tasks.todo.
  */
 
 export function downloadProject(bytes: Uint8Array, filename: string): void {

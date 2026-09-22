@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { getAsset } from '@/engine/persistence/assetStore';
 import {
   type Autosave,
   clearRecovery,
@@ -13,6 +14,7 @@ import {
 import { downloadProject, projectNameFrom, readProjectFile } from '@/engine/persistence/fileIo';
 import { DEFAULT_RECORD_SOURCE, fromProject, toProject } from '@/engine/persistence/project';
 import { packProject, unpackProject } from '@/engine/persistence/tokeFile';
+import type { SceneNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
@@ -21,6 +23,26 @@ import type { AppError } from '@/lib/errors';
 import { isErr } from '@/lib/result';
 
 const DEFAULT_NAME = 'Untitled';
+
+/** Every asset the scene references, as bytes, for the .toke zip. */
+async function assetsForProject(nodes: readonly SceneNode[]) {
+  const ids = new Set<string>();
+
+  const walk = (list: readonly SceneNode[]) => {
+    for (const node of list) {
+      if (node.kind === 'image') ids.add(node.assetId);
+      if (node.kind === 'group') walk(node.children);
+    }
+  };
+  walk(nodes);
+
+  const assets: { id: string; type: string; bytes: Uint8Array }[] = [];
+  for (const id of ids) {
+    const asset = await getAsset(id);
+    if (asset.ok) assets.push({ id, type: asset.value.type, bytes: asset.value.bytes });
+  }
+  return assets;
+}
 
 export function FileMenu() {
   const [name, setName] = useState(DEFAULT_NAME);
@@ -43,7 +65,12 @@ export function FileMenu() {
       artboard: { width: canvas.artboard.width, height: canvas.artboard.height },
       recordSource: DEFAULT_RECORD_SOURCE,
       database: await data.exportDatabase(),
-      assets: [],
+      // Assets travel inside the file. A .toke that references an image only
+      // by hash opens on another machine with a hole where the logo was.
+      assets: await assetsForProject(canvas.nodes),
+      // Fonts do not: v1 ships one family and bundles it, so carrying ~218KB
+      // per face in every project file would buy nothing. Revisit with custom
+      // font upload.
       fonts: [],
     });
 

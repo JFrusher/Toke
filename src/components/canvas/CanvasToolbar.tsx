@@ -1,5 +1,6 @@
 'use client';
 
+import { ImageImport } from '@/components/canvas/ImageImport';
 import { CycleBar } from '@/components/preview/CycleBar';
 import { Button } from '@/components/ui/Button';
 import type { AlignEdge } from '@/engine/canvas/arrange';
@@ -94,6 +95,9 @@ export function CanvasToolbar({ onPreflight }: { onPreflight: () => void }) {
             {entry.label}
           </button>
         ))}
+        {/* Not in TOOLS: an image already has a size and an aspect ratio, so
+            it is placed from a file picker rather than drawn as a box. */}
+        <ImageImport />
       </div>
 
       <span className="mx-1 h-5 w-px bg-hairline-strong" />
