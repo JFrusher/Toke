@@ -12,7 +12,6 @@ export type Command<S> = {
   /** Shown in the Edit menu — "Undo move object". */
   readonly label: string;
   readonly apply: (state: S) => S;
-  readonly invert: (state: S) => S;
   /**
    * Commands sharing a key collapse into one entry. A drag emits a command per
    * mousemove; without this, one drag costs fifty presses of Ctrl+Z.
@@ -82,7 +81,14 @@ export function createHistory<S>(initial: S, options: { limit?: number } = {}): 
     const entry = undoStack.pop();
     if (entry === undefined) return;
 
-    current = entry.command.invert(current);
+    // Restored from the snapshot taken before the command ran, rather than by
+    // asking the command to reverse itself.
+    //
+    // A per-command inverse cannot be right for a coalesced gesture: the top
+    // entry deliberately carries the state from before the WHOLE gesture, so a
+    // command that only knows its own last step would undo one nudge of a drag
+    // and leave the rest applied. The snapshot always knows.
+    current = entry.before;
     redoStack.push(entry);
     lastKey = null;
   }

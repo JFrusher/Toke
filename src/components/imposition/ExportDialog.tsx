@@ -4,7 +4,12 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { designSpec, sheetPreset } from '@/engine/imposition/specs';
-import { downloadPdf, serialiseForExport, startExport } from '@/engine/pdf/exportClient';
+import {
+  assetsForExport,
+  downloadPdf,
+  serialiseForExport,
+  startExport,
+} from '@/engine/pdf/exportClient';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
@@ -42,6 +47,10 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
       type: 'module',
     });
 
+    // Resolved before the job is posted: the worker gets plain bytes and never
+    // reaches into IndexedDB itself.
+    const assets = await assetsForExport(nodes);
+
     const handle = startExport(
       worker,
       {
@@ -55,7 +64,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
         }),
         margin,
         cropMarks,
-        assets: [],
+        assets,
       },
       setProgress,
     );

@@ -1,6 +1,8 @@
 /**
  * @vitest-environment node
  */
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   fontBytes,
@@ -8,7 +10,14 @@ import {
   PLEX_SANS_ITALIC,
   PLEX_SANS_REGULAR,
 } from '@/engine/text/fixtures';
-import { clearFonts, fontKey, getFont, loadFont, registerFont } from '@/engine/text/fontLoader';
+import {
+  BUNDLED_FONTS,
+  clearFonts,
+  fontKey,
+  getFont,
+  loadFont,
+  registerFont,
+} from '@/engine/text/fontLoader';
 import { isErr, isOk } from '@/lib/result';
 
 function load(path: string, meta: Parameters<typeof loadFont>[1] = {}) {
@@ -170,5 +179,29 @@ describe('weight fallback', () => {
     // printing another is the failure this whole module exists to prevent.
     registerFont(regularOf());
     expect(getFont('Helvetica', 400, false)).toBeNull();
+  });
+});
+
+describe('bundled coverage', () => {
+  it('ships every weight the scene graph can ask for', () => {
+    // A weight that is offered but not bundled is worse than one that is
+    // missing: fontkit falls back to the nearest loaded face and measures
+    // THAT, while the browser's CSS matching falls back to a system font with
+    // unrelated metrics — so auto-fit passes against one typeface and the
+    // canvas draws another. Weight 500 was exactly this bug.
+    const upright = BUNDLED_FONTS.filter((entry) => entry.meta.italic !== true).map(
+      (entry) => entry.meta.weight,
+    );
+
+    for (const weight of [400, 500, 600] as const) {
+      expect(upright, `weight ${weight} is offered but not bundled`).toContain(weight);
+    }
+  });
+
+  it('points every bundled font at a .ttf the app actually serves', () => {
+    for (const entry of BUNDLED_FONTS) {
+      expect(entry.url).toMatch(/^\/fonts\/.+\.ttf$/);
+      expect(existsSync(join(process.cwd(), 'public', entry.url)), entry.url).toBe(true);
+    }
   });
 });

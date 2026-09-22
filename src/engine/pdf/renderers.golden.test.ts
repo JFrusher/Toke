@@ -82,6 +82,17 @@ async function decodeContents(pdfBytes: Uint8Array, pageIndex = 0): Promise<stri
     .join('\n');
 }
 
+/**
+ * Counts a bare operator in a content stream.
+ *
+ * Tokenised rather than matched with a regex: a pattern like /(^|\s)Q(\s|$)/g
+ * consumes the separator, so two adjacent `Q Q` operators count as one and a
+ * genuinely unbalanced stream reads as balanced.
+ */
+function countOperator(stream: string, operator: string): number {
+  return stream.split(/\s+/).filter((token) => token === operator).length;
+}
+
 function box(width = 100, height = 50) {
   return { x: p(10), y: p(20), width: p(width), height: p(height) };
 }
@@ -278,9 +289,7 @@ describe('graphics state', () => {
       ellipseNode({ id: 'e', ...box(), fill: { kind: 'solid', color: '#000' } }),
     ]);
 
-    const saves = (stream.match(/(^|\s)q(\s|$)/g) ?? []).length;
-    const restores = (stream.match(/(^|\s)Q(\s|$)/g) ?? []).length;
-    expect(saves).toBe(restores);
+    expect(countOperator(stream, 'q')).toBe(countOperator(stream, 'Q'));
   });
 
   it('renders group children', async () => {
@@ -454,5 +463,55 @@ describe('images', () => {
 
     // A logo on 150 place cards must be embedded once, not 150 times.
     expect(context.images.size).toBe(1);
+  });
+});
+
+describe('image crop', () => {
+  const PNG_WIDE = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCAYAAAD0In+KAAAAE0lEQVR42mP8z8BQz0BsYBxVSFdAADYWBoGPQrDaAAAAAElFTkSuQmCC',
+    'base64',
+  );
+
+  async function streamFor(fit: 'fill' | 'contain' | 'cover') {
+    const context = await createPdfDocument();
+    const page = addSheetPage(context, A4, { trim: null });
+    const node = imageNode({ id: 'i', ...box(100, 50), assetId: 'wide', fit });
+
+    const rendered = await renderNodes({
+      context,
+      page,
+      sheet: A4,
+      nodes: [node],
+      origin: { x: 0, y: 0 },
+      assets: new Map([['wide', new Uint8Array(PNG_WIDE)]]),
+    });
+    if (!isOk(rendered)) throw new Error(rendered.error.message);
+
+    const bytes = await finish(context);
+    if (!isOk(bytes)) throw new Error('expected bytes');
+    return decodeContents(bytes.value);
+  }
+
+  it('clips a cover image to its frame', async () => {
+    // A cover image overflows by design. Without a clip path it prints over
+    // whatever sits beside it, which on an imposed sheet is the next card.
+    const stream = await streamFor('cover');
+    // `W` sets the clip path, `n` ends it without painting.
+    expect(stream).toMatch(/\bW\b/);
+    expect(stream).toMatch(/\bn\b/);
+  });
+
+  it('does not clip contain or fill, which never overflow', async () => {
+    for (const fit of ['contain', 'fill'] as const) {
+      const stream = await streamFor(fit);
+      expect(stream, fit).not.toMatch(/\bW\b/);
+    }
+  });
+
+  it('balances the clip save with a restore', async () => {
+    // An unbalanced q/Q leaks the clip into everything drawn afterwards — on
+    // an imposed sheet, every later card would be cropped to this frame.
+    const stream = await streamFor('cover');
+    expect(countOperator(stream, 'q')).toBe(countOperator(stream, 'Q'));
   });
 });

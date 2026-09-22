@@ -1,5 +1,6 @@
 import type { ExportJob, ExportMessage, ExportRequest } from '@/engine/pdf/exportProtocol';
-import type { SceneNode } from '@/engine/scene/types';
+import { getAsset } from '@/engine/persistence/assetStore';
+import type { SceneNode as Node, SceneNode } from '@/engine/scene/types';
 import { registeredFonts } from '@/engine/text/fontLoader';
 import { appError } from '@/lib/errors';
 import { err, ok, type Result } from '@/lib/result';
@@ -31,6 +32,36 @@ export function fontsForExport(): ExportJob['fonts'] {
     italic: font.italic,
     bytes: font.bytes,
   }));
+}
+
+/**
+ * Reads every asset the scene references out of the store, as bytes.
+ *
+ * Resolved on the main thread and handed to the worker: the PDF worker never
+ * touches IndexedDB, which keeps it off a store the autosave is also writing
+ * to (CLAUDE.md §2.1).
+ */
+export async function assetsForExport(nodes: readonly SceneNode[]): Promise<ExportJob['assets']> {
+  const ids = new Set<string>();
+
+  const walk = (list: readonly Node[]) => {
+    for (const node of list) {
+      if (node.kind === 'image') ids.add(node.assetId);
+      if (node.kind === 'group') walk(node.children);
+    }
+  };
+  walk(nodes);
+
+  const resolved: [string, Uint8Array][] = [];
+  for (const id of ids) {
+    const asset = await getAsset(id);
+    // A missing asset is NOT skipped here: the renderer raises
+    // PDF_ASSET_MISSING for it, which is a named failure rather than a card
+    // exported with a hole in it.
+    if (asset.ok) resolved.push([id, asset.value.bytes]);
+  }
+
+  return resolved;
 }
 
 export function startExport(

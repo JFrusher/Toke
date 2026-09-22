@@ -22,6 +22,8 @@ type Persisted = {
   readonly rightOpen: boolean;
   readonly bottomOpen: boolean;
   readonly bottomTab: BottomTab;
+  /** -1 once dismissed; the tutorial never reopens on its own after that. */
+  readonly tutorialStep: number;
 };
 
 const DEFAULTS: Persisted = {
@@ -32,6 +34,9 @@ const DEFAULTS: Persisted = {
   rightOpen: true,
   bottomOpen: false,
   bottomTab: 'data',
+  // Closed by default. It opens when someone loads the tutorial template,
+  // which is an explicit choice rather than something that happens to them.
+  tutorialStep: -1,
 };
 
 export const LIMITS = {
@@ -77,6 +82,9 @@ type ShellState = Persisted & {
   toggleRight: () => void;
   setBottomTab: (tab: BottomTab) => void;
   toggleBottom: () => void;
+  startTutorial: () => void;
+  setTutorialStep: (step: number) => void;
+  dismissTutorial: () => void;
   /** Re-reads localStorage. Called once after mount — see `AppShell`. */
   hydrate: () => void;
 };
@@ -91,9 +99,26 @@ type ShellState = Persisted & {
 export const useShellStore = create<ShellState>((set, get) => {
   function persist(patch: Partial<Persisted>) {
     set(patch);
-    const { leftWidth, rightWidth, bottomHeight, leftOpen, rightOpen, bottomOpen, bottomTab } =
-      get();
-    save({ leftWidth, rightWidth, bottomHeight, leftOpen, rightOpen, bottomOpen, bottomTab });
+    const {
+      leftWidth,
+      rightWidth,
+      bottomHeight,
+      leftOpen,
+      rightOpen,
+      bottomOpen,
+      bottomTab,
+      tutorialStep,
+    } = get();
+    save({
+      leftWidth,
+      rightWidth,
+      bottomHeight,
+      leftOpen,
+      rightOpen,
+      bottomOpen,
+      bottomTab,
+      tutorialStep,
+    });
   }
 
   return {
@@ -106,6 +131,11 @@ export const useShellStore = create<ShellState>((set, get) => {
     toggleRight: () => persist({ rightOpen: !get().rightOpen }),
     setBottomTab: (bottomTab) => persist({ bottomTab, bottomOpen: true }),
     toggleBottom: () => persist({ bottomOpen: !get().bottomOpen }),
+
+    startTutorial: () => persist({ tutorialStep: 0 }),
+    setTutorialStep: (step) => persist({ tutorialStep: Math.max(step, 0) }),
+    // Persisted, so a dismissed tutorial stays dismissed across a reload.
+    dismissTutorial: () => persist({ tutorialStep: -1 }),
     hydrate: () => set(load()),
   };
 });

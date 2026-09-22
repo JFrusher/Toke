@@ -217,10 +217,20 @@ export async function loadFontFromUrl(url: string, meta: FontMeta): Promise<Resu
 export const PLEX = 'IBM Plex Sans';
 
 /** The faces bundled with the app. */
+/**
+ * Every weight the design system offers, all of them actually shipped.
+ *
+ * A weight that is offered but not bundled is worse than one that is missing:
+ * fontkit falls back to the nearest loaded face and measures THAT, while the
+ * browser's own CSS matching falls back to a system font with unrelated
+ * metrics — so auto-fit passes against one typeface and the canvas draws
+ * another. Weight 500 was exactly this bug.
+ */
 export const BUNDLED_FONTS: readonly { url: string; meta: FontMeta }[] = [
   // family is declared explicitly: the SemiBold file reports its family as
   // "IBM Plex Sans SemiBold", which is not what a design references.
   { url: '/fonts/plex-sans-400-normal.ttf', meta: { family: PLEX, weight: 400, italic: false } },
+  { url: '/fonts/plex-sans-500-normal.ttf', meta: { family: PLEX, weight: 500, italic: false } },
   { url: '/fonts/plex-sans-600-normal.ttf', meta: { family: PLEX, weight: 600, italic: false } },
   { url: '/fonts/plex-sans-400-italic.ttf', meta: { family: PLEX, weight: 400, italic: true } },
 ];

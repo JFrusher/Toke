@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { Tokey } from '@/components/brand/Tokey';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { useImpositionStore } from '@/engine/store/useImpositionStore';
+import { useShellStore } from '@/engine/store/useShellStore';
 import { TEMPLATES, type Template } from '@/engine/templates/templates';
 import { millimetresToPoints } from '@/engine/units/convert';
 import { millimetres, points } from '@/engine/units/types';
@@ -26,6 +28,8 @@ export function TemplateGallery({ open, onClose }: { open: boolean; onClose: () 
   const runImport = useDataStore((s) => s.runImport);
   const setRecordSource = useDataStore((s) => s.setRecordSource);
   const setBleed = useImpositionStore((s) => s.setBleed);
+  const startTutorial = useShellStore((s) => s.startTutorial);
+  const dismissTutorial = useShellStore((s) => s.dismissTutorial);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<AppError | null>(null);
@@ -56,6 +60,12 @@ export function TemplateGallery({ open, onClose }: { open: boolean; onClose: () 
     });
 
     setBleed(millimetresToPoints(millimetres(3)));
+
+    // Only the guided tour opens the walkthrough; picking a plain template
+    // should not put a tutorial beside someone who did not ask for one.
+    if (template.startsTutorial === true) startTutorial();
+    else dismissTutorial();
+
     setBusy(null);
     onClose();
   }
@@ -63,6 +73,13 @@ export function TemplateGallery({ open, onClose }: { open: boolean; onClose: () 
   return (
     <Modal open={open} onClose={onClose} title="Start from a template">
       <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <Tokey state="greeting" size="sm" className="shrink-0" />
+          <p className="text-[13px] text-ink-muted">
+            Each template loads a design and a 24-guest roster, ready to impose and export.
+          </p>
+        </div>
+
         <ul className="flex flex-col gap-2">
           {TEMPLATES.map((template) => (
             <li key={template.id}>
@@ -83,7 +100,7 @@ export function TemplateGallery({ open, onClose }: { open: boolean; onClose: () 
         </ul>
 
         <p data-numeric className="text-[11px] text-ink-subtle">
-          Each template imports a 24-guest sample roster, replacing the current data.
+          Loading a template replaces the current data.
         </p>
 
         {error !== null && (
