@@ -13,7 +13,6 @@ function add(item: string): Command<State> {
   return {
     label: `add ${item}`,
     apply: (state) => ({ ...state, items: [...state.items, item] }),
-    invert: (state) => ({ ...state, items: state.items.filter((i) => i !== item) }),
   };
 }
 
@@ -21,7 +20,6 @@ function select(id: string): Command<State> {
   return {
     label: `select ${id}`,
     apply: (state) => ({ ...state, selection: [id] }),
-    invert: (state) => ({ ...state, selection: [] }),
   };
 }
 
@@ -167,5 +165,45 @@ describe('labels', () => {
     history.undo();
     expect(history.redoLabel()).toBe('add a');
     expect(history.undoLabel()).toBeNull();
+  });
+});
+
+describe('undo restores the state from before the command', () => {
+  it('reverses a wholesale replacement', () => {
+    // Regression: the replacement command used to build its inverse lazily,
+    // capturing `previous` the first time invert() ran — which is at UNDO
+    // time, after apply had already changed the state. Undo restored the
+    // state it was already in, so every inspector edit was undoable in name
+    // only.
+    const history = createHistory({ value: 'a' });
+
+    history.run({ label: 'to b', apply: () => ({ value: 'b' }) });
+    expect(history.state().value).toBe('b');
+
+    history.undo();
+    expect(history.state().value).toBe('a');
+  });
+
+  it('reverses a whole coalesced gesture, not just its last step', () => {
+    // The top entry deliberately keeps the state from before the gesture
+    // began, so one undo reverses the whole drag.
+    const history = createHistory({ value: 0 });
+
+    history.run({ label: 'drag', coalesceKey: 'drag', apply: () => ({ value: 1 }) });
+    history.run({ label: 'drag', coalesceKey: 'drag', apply: () => ({ value: 2 }) });
+    history.run({ label: 'drag', coalesceKey: 'drag', apply: () => ({ value: 3 }) });
+    expect(history.state().value).toBe(3);
+
+    history.undo();
+    expect(history.state().value).toBe(0);
+  });
+
+  it('redo reapplies after an undo', () => {
+    const history = createHistory({ value: 'a' });
+    history.run({ label: 'to b', apply: () => ({ value: 'b' }) });
+
+    history.undo();
+    history.redo();
+    expect(history.state().value).toBe('b');
   });
 });

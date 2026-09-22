@@ -1,6 +1,19 @@
-import { degrees, type PDFFont, type PDFPage, rgb } from 'pdf-lib';
+import {
+  clip,
+  closePath,
+  degrees,
+  endPath,
+  lineTo,
+  moveTo,
+  type PDFFont,
+  type PDFPage,
+  popGraphicsState,
+  pushGraphicsState,
+  rgb,
+} from 'pdf-lib';
 import type { SheetSpec } from '@/engine/imposition/specs';
 import { embedFont, embedImage, flipY, type PdfContext } from '@/engine/pdf/document';
+import { fitBox, needsClip } from '@/engine/scene/image';
 import type { Fill, SceneNode, Stroke, TextNode } from '@/engine/scene/types';
 import { assertNever } from '@/engine/scene/types';
 import { fontKey, getFont } from '@/engine/text/fontLoader';
@@ -89,28 +102,6 @@ function rotationOptions(node: SceneNode) {
     pivotX: node.width / 2,
     pivotY: node.height / 2,
   } as const;
-}
-
-/**
- * Box for an image inside its frame, honouring the fit mode.
- *
- * 'cover' deliberately overflows the frame — the canvas clips it, and a PDF
- * clip path is P8.5 work the renderer does not yet emit, so an overflowing
- * cover image is currently visible past its frame. Tracked, not silent.
- */
-function fitImage(node: Extract<SceneNode, { kind: 'image' }>, aspect: number) {
-  if (node.fit === 'fill') {
-    return { x: 0, y: 0, width: node.width, height: node.height };
-  }
-
-  const frameAspect = node.width / node.height;
-  const matchWidth = node.fit === 'contain' ? aspect > frameAspect : aspect < frameAspect;
-
-  const width = matchWidth ? node.width : node.height * aspect;
-  const height = matchWidth ? node.width / aspect : node.height;
-
-  // Centred in the frame, which is what both fit modes mean.
-  return { x: (node.width - width) / 2, y: (node.height - height) / 2, width, height };
 }
 
 /** Ellipse drawn with pdf-lib's own primitive, which emits bezier curves. */
@@ -284,7 +275,26 @@ async function renderNode(input: RenderInput, node: SceneNode): Promise<Result<t
       const embedded = await embedImage(input.context, node.assetId, bytes);
       if (isErr(embedded)) return err(embedded.error);
 
-      const placed = fitImage(node, embedded.value.width / embedded.value.height);
+      const aspect = embedded.value.width / embedded.value.height;
+      const placed = fitBox(node, aspect);
+      const clipped = needsClip(node.fit, node, aspect);
+
+      // A cover image overflows its frame by design; without a clip path it
+      // prints over whatever sits beside it, which on an imposed sheet is the
+      // neighbouring card.
+      if (clipped) {
+        page.pushOperators(
+          pushGraphicsState(),
+          moveTo(absoluteX, flipY(sheet, topY + node.height)),
+          lineTo(absoluteX + node.width, flipY(sheet, topY + node.height)),
+          lineTo(absoluteX + node.width, flipY(sheet, topY)),
+          lineTo(absoluteX, flipY(sheet, topY)),
+          closePath(),
+          clip(),
+          endPath(),
+        );
+      }
+
       page.drawImage(embedded.value.image, {
         x: absoluteX + placed.x,
         y: flipY(sheet, topY + placed.y + placed.height),
@@ -293,6 +303,8 @@ async function renderNode(input: RenderInput, node: SceneNode): Promise<Result<t
         opacity: node.opacity,
         ...rotationOptions(node),
       });
+
+      if (clipped) page.pushOperators(popGraphicsState());
       return ok(true);
     }
 

@@ -29,6 +29,8 @@ export type Template = {
   readonly nodes: readonly SceneNode[];
   /** Imported through the normal CSV path, so the roster is real data. */
   readonly sampleCsv: string;
+  /** Opens the guided first run when this template loads. */
+  readonly startsTutorial?: boolean;
 };
 
 /**
@@ -184,6 +186,17 @@ export const TEMPLATES: readonly Template[] = [
     recordSource: "SELECT * FROM guests WHERE rsvp_status = 'Accepted' ORDER BY table_number, id",
     nodes: tentPlaceCard(),
     sampleCsv: SAMPLE_GUESTS,
+  },
+  {
+    id: 'tutorial',
+    name: 'Guided tour',
+    description: 'The flat place card, with a seven-step walkthrough alongside.',
+    trim: { width: mm(85), height: mm(55) },
+    tentFold: false,
+    recordSource: "SELECT * FROM guests WHERE rsvp_status = 'Accepted' ORDER BY table_number, id",
+    nodes: flatPlaceCard(),
+    sampleCsv: SAMPLE_GUESTS,
+    startsTutorial: true,
   },
 ];
 

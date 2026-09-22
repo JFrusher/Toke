@@ -19,6 +19,9 @@ next-env.d.ts
 coverage/
 .nyc_output/
 /test-results/
+# Scratch output from manual runs — save/export tests write here.
+/temp/
+/scratch/print
 /playwright-report/
 /playwright/.cache/
 /blob-report/

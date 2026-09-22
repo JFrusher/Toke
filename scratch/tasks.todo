@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-22, after Phase 9 complete (P9.1-P9.7). All 63 plan tasks done.
+Last audited: 2026-09-22, after the brand, tutorial and photo-import work on top of v0.1.0.
 
 ---
 
@@ -46,7 +46,7 @@ fires at all.
 
 ## 2. Blocked on a later phase
 
-### BLK-1 · Image tool · OPEN (unblocked) · from P3.4
+### BLK-1 · Image tool · CLOSED
 **Unblocked by P4.1 and P8.4** — the asset store is content-addressed and the
 PDF renderer now embeds PNG/JPEG from bytes handed to it on the export job.
 Still needs: a file input on the toolbar, `FabricImage` construction from
@@ -150,10 +150,11 @@ the history module but no call site passes one.
 - **Fix:** pass a `coalesceKey` such as `nudge:<selection-ids>` from
   `useCanvasStore.nudge`.
 
-### INC-11 · Assets and fonts are not collected into a save · OPEN · P4.2
-`FileMenu.buildBytes` passes `assets: []` and `fonts: []`. The `.toke` format
-carries both and the round trip is tested at the format level, but the app
-never populates them. Blocks BLK-1 from being genuinely complete.
+### INC-11 · Assets and fonts are not collected into a save · PARTLY CLOSED
+Assets now travel inside the `.toke` and into the export job; a saved project
+with an image reopens with the image. Fonts still do not: v1 ships one family
+and bundles it, so carrying ~218KB per face in every project file would buy
+nothing. Revisit with custom font upload.
 
 ### INC-12 · Save always downloads a new file · OPEN · P4.3
 No File System Access API, so "Save" cannot overwrite the file the user
@@ -216,13 +217,11 @@ errors with `PDF_ASSET_MISSING` rather than exporting a hole, so the failure
 is loud at export time even without a pre-flight check. A missing font face
 is also unchecked: `getFont` returning null silently skips the fit check.
 
-### INC-23 · Cover images overflow their frame in the PDF · OPEN · P8.4, P8.5
-`fitImage` computes a 'cover' box that deliberately exceeds the frame, and the
-renderer emits no clip path — so a cover image prints past its own bounds.
-Fine today because image placement does not exist (BLK-1), wrong the moment it
-does.
-
-- **Accept:** a cover-fit image is clipped to its frame in the exported PDF.
+### INC-23 · Cover images overflow their frame in the PDF · CLOSED
+The renderer now emits a clip path for cover-fit images, balanced with the
+graphics state so it cannot leak into the next card on the sheet. The fit
+maths moved to `engine/scene/image.ts`, which the canvas and the PDF renderer
+both call — one definition of what 'cover' means.
 
 ### INC-24 · Export sends every registered font, not just the used faces · OPEN · P8.8
 `fontsForExport` ships the whole registry across the worker boundary because
@@ -247,6 +246,34 @@ save is the fix if a run ever exceeds it.
 nothing in the shell calls them — the Export dialog only runs a full sheet
 export. Needs a "Proof current record" action.
 
+### INC-33 · Undo was a no-op for every inspector edit · CLOSED
+The replacement command built its inverse lazily — `previous ??= document.nodes`
+inside `invert()` — and `invert` is called at UNDO time, after `apply` has
+already changed the state. It captured the new nodes and "restored" them, so
+binding edits, align, distribute, reorder and group were undoable in name only.
+Never caught, because the undo tests all used `addNode`/`deleteSelection`,
+which compute their inverses from the node itself.
+
+Fixed by deleting `invert` entirely: the history stack already snapshots the
+state before every command, and a coalesced gesture's entry deliberately holds
+the state from before the WHOLE gesture — which no per-command inverse can
+reconstruct. Less code and correct for drags.
+
+### INC-34 · Image crop is fit-mode only, no crop rectangle · KNOWN
+Fit, Fill and Stretch against the frame, with the frame resizable. There is no
+drag-a-crop-box-over-the-image interaction and no pan-within-frame. Adding one
+means a `cropRect` on `ImageNode` and a `.toke` schemaVersion bump.
+
+### INC-35 · Image resize does not lock aspect · OPEN
+The frame resizes freely; with Fit or Fill the picture stays undistorted
+inside it, but Stretch will distort and nothing warns. A Shift-drag aspect
+lock on the canvas handles is the fix.
+
+### INC-36 · Mascot artwork is raster, not vector · KNOWN
+The six Tokey states are ~110KB PNGs at ~320px square, which is fine at the
+48-112px they render at but will not survive a larger use. The brace mark IS
+vector. Redraw the character as SVG only if it ever needs to be large.
+
 ### INC-28 · SQL console highlighting has no parser · KNOWN · P9.3
 Token-level colouring over a transparent textarea. A keyword inside an
 unterminated string still colours, and there is no bracket matching or
@@ -262,11 +289,16 @@ binary that drifts whenever the schema changes. Declaring the design in
 CSV path is typechecked and exercises the real user path. Revisit if templates
 ever need to carry assets or multiple designs.
 
-### INC-30 · Font weight 500 is not bundled · OPEN · P5.1, P9.4
-`BUNDLED_FONTS` ships 400, 600 and 400-italic. A design asking for 500 now
-falls back to the nearest weight (P9.4) rather than failing, but the design
-system lists 400/500/600 as available. Either bundle the 500 face or stop
-offering it in the inspector.
+### INC-30 · Font weight 500 is not bundled · CLOSED
+Worse than recorded. `getFont` fell back to the nearest loaded face, so
+**fontkit measured Plex 400 while the browser's own CSS matching fell back to
+a system font** — auto-fit passed against one typeface and the canvas drew
+another, at roughly double the width. Caught by looking at a screenshot, not
+by any test.
+
+Fixed by bundling `plex-sans-500-normal.ttf`, with a fitness test asserting
+that every weight the scene graph can ask for is actually shipped and that
+each bundled URL resolves to a file in `public/`.
 
 ### INC-31 · Pre-flight does not check font availability · OPEN · P7.3, P9.4
 `getFont` now substitutes the nearest weight instead of returning null, so a

@@ -3,8 +3,10 @@
 import * as fabric from 'fabric';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { snap, snapTargets } from '@/engine/canvas/snapping';
+import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
+import { fitBox } from '@/engine/scene/image';
 import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { MAX_ZOOM, MIN_ZOOM, type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
@@ -14,6 +16,7 @@ import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
 import { measureText } from '@/engine/text/measure';
 import { renderTextNode, type StudioMode } from '@/engine/tokens/render';
 import { points } from '@/engine/units/types';
+import { isOk } from '@/lib/result';
 
 /**
  * Fabric owns interaction; the store owns truth.
@@ -134,11 +137,78 @@ function textPresentation(node: SceneNode, mode: StudioMode, row: Record<string,
   return shown;
 }
 
+/**
+ * Object URLs and decoded elements for every image node on the canvas.
+ *
+ * Assets live in IndexedDB as bytes, so a node cannot be drawn until its
+ * bytes have been read and decoded. Loaded once per asset id and revoked on
+ * unmount — an object URL that is never revoked keeps the whole image alive
+ * for the life of the tab.
+ */
+function useImageAssets(nodes: readonly SceneNode[]) {
+  const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map());
+  const [elements, setElements] = useState<ReadonlyMap<string, HTMLImageElement>>(new Map());
+  const loaded = useRef(new Map<string, string>());
+
+  const ids = renderableNodes(nodes)
+    .filter((node): node is Extract<SceneNode, { kind: 'image' }> => node.kind === 'image')
+    .map((node) => node.assetId)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+    const wanted = ids === '' ? [] : ids.split(',');
+
+    void (async () => {
+      for (const id of wanted) {
+        if (loaded.current.has(id)) continue;
+
+        const asset = await getAsset(id);
+        if (cancelled) return;
+        if (!isOk(asset)) {
+          reportDiagnostic('image', 'error', asset.error);
+          continue;
+        }
+
+        const url = objectUrlFor(asset.value);
+        loaded.current.set(id, url);
+
+        const element = new Image();
+        element.src = url;
+        await element.decode().catch(() => undefined);
+        if (cancelled) return;
+
+        setUrls(new Map(loaded.current));
+        setElements((current) => new Map(current).set(url, element));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ids]);
+
+  // Revoked only on unmount: revoking when a node is deleted would break an
+  // undo that brings it straight back.
+  useEffect(() => {
+    const urlsToRevoke = loaded.current;
+    return () => {
+      for (const url of urlsToRevoke.values()) URL.revokeObjectURL(url);
+      urlsToRevoke.clear();
+    };
+  }, []);
+
+  return { urls, elements };
+}
+
 function buildFabricObject(
   node: SceneNode,
   fontsReady: boolean,
   mode: StudioMode,
   row: Record<string, unknown> | null,
+  imageUrls: ReadonlyMap<string, string>,
+  imageElements: ReadonlyMap<string, HTMLImageElement>,
 ): fabric.FabricObject | null {
   const props = toFabricProps(node);
 
@@ -163,10 +233,53 @@ function buildFabricObject(
       if (box !== null) text.set({ width: box.width, height: box.height });
       return text;
     }
-    case 'image':
+    case 'image': {
+      const url = imageUrls.get(node.assetId);
+      // The bytes are loaded asynchronously from IndexedDB; until the object
+      // URL exists, a frame stands in so the layout does not jump when it
+      // arrives.
+      if (url === undefined) {
+        return new fabric.Rect({
+          ...props,
+          fill: 'transparent',
+          stroke: '#C7BFB0',
+          strokeDashArray: [4, 3],
+        });
+      }
+
+      const element = imageElements.get(url);
+      if (element === undefined) return null;
+
+      const image = new fabric.FabricImage(element, props);
+      const aspect = element.naturalWidth / element.naturalHeight;
+      const placed = fitBox(node, aspect);
+
+      // Scaled from the shared fitBox, so the canvas and the PDF crop to the
+      // same rectangle. Two implementations of 'cover' is how a preview and a
+      // print stop agreeing.
+      image.set({
+        scaleX: placed.width / element.naturalWidth,
+        scaleY: placed.height / element.naturalHeight,
+        left: node.x + placed.x,
+        top: node.y + placed.y,
+        // Cover overflows its frame by design; the clip keeps it off the
+        // neighbouring artwork, matching the PDF clip path.
+        clipPath:
+          node.fit === 'cover'
+            ? new fabric.Rect({
+                left: -placed.x,
+                top: -placed.y,
+                width: node.width,
+                height: node.height,
+                originX: 'left',
+                originY: 'top',
+              })
+            : undefined,
+      });
+      return image;
+    }
     case 'group':
-      // Images need the asset store (P4.1) and groups are a store-level
-      // construct for now; neither is placeable from the toolbar yet.
+      // Groups are a store-level construct; children render flattened.
       return null;
   }
 }
@@ -184,6 +297,7 @@ export function StudioCanvas() {
   const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
+  const { urls: imageUrls, elements: imageElements } = useImageAssets(nodes);
   const selection = useCanvasStore((s) => s.selection);
   const zoom = useCanvasStore((s) => s.zoom);
   const panX = useCanvasStore((s) => s.panX);
@@ -321,7 +435,14 @@ export function StudioCanvas() {
     for (const node of renderable) {
       const existing = objects.get(node.id);
       if (existing === undefined) {
-        const created = buildFabricObject(node, fontsReady, mode, currentRow);
+        const created = buildFabricObject(
+          node,
+          fontsReady,
+          mode,
+          currentRow,
+          imageUrls,
+          imageElements,
+        );
         if (created === null) continue;
         created.set({ nodeId: node.id } as Partial<fabric.FabricObject>);
         objects.set(node.id, created);
@@ -363,7 +484,10 @@ export function StudioCanvas() {
     // because only the tree was checked.
     setRenderedCount(objects.size);
     canvas.requestRenderAll();
-  }, [nodes, fontsReady, mode, cursor, rows]);
+    // imageUrls and imageElements are dependencies, not incidental reads: the
+    // bytes arrive from IndexedDB after the first render, and without them the
+    // placeholder frame would never be replaced by the picture.
+  }, [nodes, fontsReady, mode, cursor, rows, imageUrls, imageElements]);
 
   // ---- selection: store → fabric ----------------------------------------
   useEffect(() => {

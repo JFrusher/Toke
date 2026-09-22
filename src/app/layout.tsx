@@ -25,6 +25,9 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: 'toke',
   description: 'Variable data design studio for print.',
+  // The brace mark as SVG: one file that stays crisp at every size, rather
+  // than a set of rasters that drift out of sync.
+  icons: { icon: '/icon.svg' },
 };
 
 /* Props are typed explicitly rather than via Next's generated `LayoutProps<"/">`

@@ -109,15 +109,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     return {
       label,
       apply: (document) => ({ ...document, nodes: next }),
-      // The inverse closes over the list as it was when the command was
-      // built, which is what makes a wholesale swap reversible.
-      invert: (() => {
-        let previous: readonly SceneNode[] | null = null;
-        return (document: Document) => {
-          previous ??= document.nodes;
-          return { ...document, nodes: previous };
-        };
-      })(),
       ...(coalesceKey === undefined ? {} : { coalesceKey }),
     };
   }
@@ -166,10 +157,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
           nodes: [...document.nodes, node],
           selection: [node.id],
         }),
-        invert: (document) => ({
-          nodes: document.nodes.filter((n) => n.id !== node.id),
-          selection: [],
-        }),
       });
     },
 
@@ -190,14 +177,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         }),
         // Restoring by concatenation would move the objects to the top of the
         // stack. Reinsert at the recorded index to preserve z-order.
-        invert: (document) => {
-          const restored = [...document.nodes];
-          const indices = get().nodes.map((node, index) => ({ node, index }));
-          for (const { node, index } of indices) {
-            if (selection.has(node.id)) restored.splice(index, 0, node);
-          }
-          return { nodes: restored, selection: [...selection] };
-        },
       });
     },
 
@@ -273,11 +252,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
       run({
         label: 'Group',
         apply: (document) => ({ ...document, nodes: next, selection: [id] }),
-        invert: (document) => ({
-          ...document,
-          nodes: get().nodes,
-          selection: get().selection,
-        }),
       });
     },
 
