@@ -6,6 +6,8 @@ import { CanvasToolbar } from '@/components/canvas/CanvasToolbar';
 import { LayersPanel } from '@/components/canvas/LayersPanel';
 import { CsvImportDialog } from '@/components/data/CsvImportDialog';
 import { DataGrid } from '@/components/data/DataGrid';
+import { ExportDialog } from '@/components/imposition/ExportDialog';
+import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
 import { PreflightReport } from '@/components/preview/PreflightReport';
@@ -47,6 +49,7 @@ export default function StudioPage() {
   const [importing, setImporting] = useState(false);
   const [showData, setShowData] = useState(false);
   const [preflighting, setPreflighting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void openDatabase();
@@ -117,6 +120,9 @@ export default function StudioPage() {
           <Button onClick={() => setImporting(true)} data-testid="open-import">
             Import CSV
           </Button>
+          <Button onClick={() => setExporting(true)} data-testid="open-export">
+            Export PDF
+          </Button>
         </div>
       </header>
 
@@ -134,6 +140,7 @@ export default function StudioPage() {
         <aside className="w-60 shrink-0 overflow-auto border-hairline-strong border-l bg-panel">
           <TransformFields />
           <TokenBindingPanel />
+          <ImpositionPanel />
         </aside>
       </div>
 
@@ -154,6 +161,7 @@ export default function StudioPage() {
 
       <CsvImportDialog open={importing} onClose={() => setImporting(false)} />
       <PreflightReport open={preflighting} onClose={() => setPreflighting(false)} />
+      <ExportDialog open={exporting} onClose={() => setExporting(false)} />
     </main>
   );
 }

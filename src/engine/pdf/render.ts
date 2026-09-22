@@ -1,6 +1,6 @@
-import { type PDFFont, type PDFPage, rgb } from 'pdf-lib';
+import { degrees, type PDFFont, type PDFPage, rgb } from 'pdf-lib';
 import type { SheetSpec } from '@/engine/imposition/specs';
-import { embedFont, flipY, type PdfContext } from '@/engine/pdf/document';
+import { embedFont, embedImage, flipY, type PdfContext } from '@/engine/pdf/document';
 import type { Fill, SceneNode, Stroke, TextNode } from '@/engine/scene/types';
 import { assertNever } from '@/engine/scene/types';
 import { fontKey, getFont } from '@/engine/text/fontLoader';
@@ -28,6 +28,13 @@ export type RenderInput = {
   readonly nodes: readonly SceneNode[];
   /** Cell origin on the sheet, top-down. This is what places card 7 in cell 7. */
   readonly origin: { readonly x: number; readonly y: number };
+  /**
+   * Asset bytes keyed by content hash.
+   *
+   * The caller resolves these from the asset store BEFORE rendering: the PDF
+   * worker gets plain bytes, never an IndexedDB handle.
+   */
+  readonly assets?: ReadonlyMap<string, Uint8Array>;
 };
 
 function parseColour(hex: string) {
@@ -62,6 +69,48 @@ function strokeOptions(stroke: Stroke) {
 
 function isPainted(fill: Fill, stroke: Stroke): boolean {
   return fill.kind !== 'none' || stroke.kind !== 'none';
+}
+
+const DEGREES_PER_RADIAN = 180 / Math.PI;
+
+/**
+ * Rotation options for a pdf-lib draw call.
+ *
+ * The engine stores radians and rotates about the object's CENTRE; pdf-lib
+ * takes degrees and rotates about the draw origin. Passing the angle through
+ * without moving the pivot swings the object away from where the editor drew
+ * it, by more the further it sits from its own corner.
+ */
+function rotationOptions(node: SceneNode) {
+  if (node.rotation === 0) return {};
+  return {
+    rotate: degrees(-node.rotation * DEGREES_PER_RADIAN),
+    // Pivot at the centre, expressed relative to the draw origin.
+    pivotX: node.width / 2,
+    pivotY: node.height / 2,
+  } as const;
+}
+
+/**
+ * Box for an image inside its frame, honouring the fit mode.
+ *
+ * 'cover' deliberately overflows the frame — the canvas clips it, and a PDF
+ * clip path is P8.5 work the renderer does not yet emit, so an overflowing
+ * cover image is currently visible past its frame. Tracked, not silent.
+ */
+function fitImage(node: Extract<SceneNode, { kind: 'image' }>, aspect: number) {
+  if (node.fit === 'fill') {
+    return { x: 0, y: 0, width: node.width, height: node.height };
+  }
+
+  const frameAspect = node.width / node.height;
+  const matchWidth = node.fit === 'contain' ? aspect > frameAspect : aspect < frameAspect;
+
+  const width = matchWidth ? node.width : node.height * aspect;
+  const height = matchWidth ? node.width / aspect : node.height;
+
+  // Centred in the frame, which is what both fit modes mean.
+  return { x: (node.width - width) / 2, y: (node.height - height) / 2, width, height };
 }
 
 /** Ellipse drawn with pdf-lib's own primitive, which emits bezier curves. */
@@ -125,7 +174,7 @@ function drawText(
       font: embedded,
       ...fillOptions(node.fill),
       opacity: node.opacity,
-      ...(node.tracking === 0 ? {} : { wordBreaks: [] }),
+      ...(node.rotation === 0 ? {} : { rotate: degrees(-node.rotation * (180 / Math.PI)) }),
     });
   });
 }
@@ -154,6 +203,7 @@ async function renderNode(input: RenderInput, node: SceneNode): Promise<Result<t
         opacity: node.opacity,
         ...fillOptions(node.fill),
         ...strokeOptions(node.stroke),
+        ...rotationOptions(node),
       });
       return ok(true);
     }
@@ -216,9 +266,35 @@ async function renderNode(input: RenderInput, node: SceneNode): Promise<Result<t
       return ok(true);
     }
 
-    case 'image':
-      // Placement does not exist yet (BLK-1); nothing can reference an asset.
+    case 'image': {
+      if (node.width <= 0 || node.height <= 0) return ok(true);
+
+      const bytes = input.assets?.get(node.assetId);
+      if (bytes === undefined) {
+        // Silently dropping the image would export a card with a hole in it
+        // that nobody notices until the proof comes back from the press.
+        return err(
+          appError('PDF_ASSET_MISSING', `No bytes for asset "${node.assetId}".`, {
+            objectId: node.id,
+            hint: 'Resolve every referenced asset from the store before exporting.',
+          }),
+        );
+      }
+
+      const embedded = await embedImage(input.context, node.assetId, bytes);
+      if (isErr(embedded)) return err(embedded.error);
+
+      const placed = fitImage(node, embedded.value.width / embedded.value.height);
+      page.drawImage(embedded.value.image, {
+        x: absoluteX + placed.x,
+        y: flipY(sheet, topY + placed.y + placed.height),
+        width: placed.width,
+        height: placed.height,
+        opacity: node.opacity,
+        ...rotationOptions(node),
+      });
       return ok(true);
+    }
 
     case 'group': {
       // Children hold ABSOLUTE coordinates by design (engine/canvas/arrange),

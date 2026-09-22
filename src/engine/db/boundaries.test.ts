@@ -139,3 +139,51 @@ describe('worker boundary', () => {
     expect(lines).toBeLessThan(120);
   });
 });
+
+describe('worker boundary — CLAUDE.md §2.1 rule 2', () => {
+  it('keeps Fabric out of both workers', () => {
+    // Fabric instances are not structured-cloneable and carry the whole canvas
+    // by reference; a single import here would move the scene graph across the
+    // boundary by accident.
+    const workers = FILES.filter((file) => file.path.endsWith('.worker.ts'));
+    expect(workers.length).toBeGreaterThanOrEqual(2);
+
+    for (const worker of workers) {
+      expect(worker.source, worker.path).not.toMatch(/from ['"]fabric/);
+    }
+  });
+
+  it('keeps the PDF worker off the database', () => {
+    // The export receives resolved rows as plain data. A query from inside the
+    // PDF worker would be a second database handle in a second thread.
+    const worker = FILES.find((file) => file.path === 'engine/pdf/pdf.worker.ts');
+    expect(worker).toBeDefined();
+    expect(worker?.source).not.toMatch(/sql\.js|engine\/db\//);
+  });
+
+  it('keeps IndexedDB out of the PDF worker', () => {
+    // Assets cross as bytes on the job (P8.4), not as a store handle: a worker
+    // reaching into IndexedDB mid-render is a race with autosave.
+    const worker = FILES.find((file) => file.path === 'engine/pdf/pdf.worker.ts');
+    expect(worker?.source).not.toMatch(/indexedDB|assetStore/);
+  });
+
+  it('round trips an export job through structuredClone', () => {
+    const job = {
+      nodes: [],
+      rows: [{ first_name: 'Ada' }],
+      sheet: { id: 'a4', label: 'A4', width: 595.276, height: 841.89 },
+      design: {
+        trim: { width: 240, height: 155 },
+        bleed: 8.5,
+        fold: null,
+      },
+      margin: 28.35,
+      cropMarks: true,
+      fonts: [{ family: 'IBM Plex Sans', weight: 400, italic: false, bytes: new Uint8Array([1]) }],
+      assets: [['abc', new Uint8Array([2])]],
+    };
+
+    expect(() => structuredClone(job)).not.toThrow();
+  });
+});

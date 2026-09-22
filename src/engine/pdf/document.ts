@@ -1,5 +1,5 @@
 import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { SheetSpec } from '@/engine/imposition/specs';
 import type { LoadedFont } from '@/engine/text/fontLoader';
 import type { Points } from '@/engine/units/types';
@@ -24,6 +24,13 @@ export type PdfContext = {
   readonly pages: PDFPage[];
   /** Embedded faces, keyed as `family|weight|italic`. One subset per face. */
   readonly fonts: Map<string, PDFFont>;
+  /**
+   * Embedded images, keyed by asset hash.
+   *
+   * One copy per distinct asset, however many cards use it. A logo repeated
+   * on 150 place cards must be embedded once, not 150 times.
+   */
+  readonly images: Map<string, PDFImage>;
 };
 
 export type TrimSpec = {
@@ -44,7 +51,7 @@ export async function createPdfDocument(): Promise<PdfContext> {
   // survives and carries the same information for a shop debugging a file.
   doc.setCreator('toke');
 
-  return { doc, pages: [], fonts: new Map() };
+  return { doc, pages: [], fonts: new Map(), images: new Map() };
 }
 
 /** Converts an engine y (top-down) into a PDF y (bottom-up). */
@@ -80,6 +87,44 @@ export function addSheetPage(
  * ~218KB; a 150-card run using forty distinct letters has no business
  * carrying all of it, three times over.
  */
+/**
+ * Embeds an image once per asset, sniffing the format from its magic bytes.
+ *
+ * pdf-lib carries PNG and JPEG natively and nothing else; the file extension
+ * is not consulted because an asset is stored under its content hash and has
+ * no name to read.
+ */
+export async function embedImage(
+  context: PdfContext,
+  assetId: string,
+  bytes: Uint8Array,
+): Promise<Result<{ image: PDFImage; width: number; height: number }>> {
+  const cached = context.images.get(assetId);
+  if (cached !== undefined) {
+    return ok({ image: cached, width: cached.width, height: cached.height });
+  }
+
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
+
+  if (!isPng && !isJpeg) {
+    return err(
+      appError('PDF_IMAGE_UNSUPPORTED', 'Only PNG and JPEG can be embedded in a PDF.', {
+        hint: 'Convert the asset to PNG or JPEG before placing it.',
+      }),
+    );
+  }
+
+  try {
+    const image = isPng ? await context.doc.embedPng(bytes) : await context.doc.embedJpg(bytes);
+    context.images.set(assetId, image);
+    return ok({ image, width: image.width, height: image.height });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return err(appError('PDF_IMAGE_EMBED_FAILED', `Could not embed image: ${message}`));
+  }
+}
+
 export async function embedFont(
   context: PdfContext,
   key: string,

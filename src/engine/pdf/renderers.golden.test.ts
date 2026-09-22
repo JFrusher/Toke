@@ -7,7 +7,14 @@ import { describe, expect, it } from 'vitest';
 import { sheetPreset } from '@/engine/imposition/specs';
 import { addSheetPage, createPdfDocument, finish } from '@/engine/pdf/document';
 import { renderNodes } from '@/engine/pdf/render';
-import { ellipseNode, groupNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
+import {
+  ellipseNode,
+  groupNode,
+  imageNode,
+  lineNode,
+  rectNode,
+  textNode,
+} from '@/engine/scene/factories';
 import type { SceneNode } from '@/engine/scene/types';
 import { fontBytes, PLEX_SANS_REGULAR } from '@/engine/text/fixtures';
 import { clearFonts, loadFont, registerFont } from '@/engine/text/fontLoader';
@@ -321,5 +328,131 @@ describe('origin offset', () => {
 
     const matches = [...stream.matchAll(/1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/g)];
     expect(Number(matches[0]?.[1])).toBeCloseTo(100, 1);
+  });
+});
+
+describe('rotation', () => {
+  it('emits a rotation matrix for a rotated rectangle', async () => {
+    const stream = await contentStream([
+      rectNode({
+        id: 'r',
+        ...box(),
+        rotation: Math.PI / 4,
+        fill: { kind: 'solid', color: '#000' },
+      }),
+    ]);
+
+    // A 45° rotation puts ±0.7071 in all four matrix slots. An unrotated draw
+    // emits `1 0 0 1`, so this fails loudly if rotation is dropped again.
+    expect(stream).toMatch(/0\.707\d* -?0\.707\d* -?0\.707\d* 0\.707\d* [\d.-]+ [\d.-]+ cm/);
+  });
+
+  it('leaves an unrotated node on the identity matrix', async () => {
+    const stream = await contentStream([
+      rectNode({ id: 'r', ...box(), fill: { kind: 'solid', color: '#000' } }),
+    ]);
+    expect(stream).toContain('1 0 0 1 10 ');
+  });
+
+  it('rotates about the centre, so the centre does not move', async () => {
+    // Rotating about the draw origin instead swings the object away from where
+    // the editor drew it — further the larger the object.
+    const node = rectNode({
+      id: 'r',
+      x: p(100),
+      y: p(100),
+      width: p(200),
+      height: p(100),
+      fill: { kind: 'solid', color: '#000' },
+    });
+
+    const stream = await contentStream([{ ...node, rotation: Math.PI / 2 }]);
+    const match = /([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) cm/.exec(stream);
+    if (match === null) throw new Error('no transform matrix emitted');
+
+    const [a, b, c, d, e, f] = match.slice(1).map(Number) as [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
+
+    // Transform the rect's own centre through the emitted matrix and compare
+    // it with where the unrotated centre sits on the page.
+    const cx = node.width / 2;
+    const cy = node.height / 2;
+    const x = (a ?? 0) * cx + (c ?? 0) * cy + (e ?? 0);
+    const y = (b ?? 0) * cx + (d ?? 0) * cy + (f ?? 0);
+
+    expect(x).toBeCloseTo(node.x + cx, 3);
+    expect(y).toBeCloseTo(A4.height - node.y - node.height + cy, 3);
+  });
+});
+
+describe('images', () => {
+  // A 1×1 red PNG. Smallest thing pdf-lib will actually embed.
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  async function renderImage(node: SceneNode, assets: ReadonlyMap<string, Uint8Array>) {
+    const context = await createPdfDocument();
+    const page = addSheetPage(context, A4, { trim: null });
+    return renderNodes({ context, page, sheet: A4, nodes: [node], origin: { x: 0, y: 0 }, assets });
+  }
+
+  const NODE = imageNode({ id: 'i', ...box(100, 50), assetId: 'abc' });
+  const ASSETS = new Map([['abc', new Uint8Array(PNG)]]);
+
+  it('draws an image from resolved asset bytes', async () => {
+    const context = await createPdfDocument();
+    const page = addSheetPage(context, A4, { trim: null });
+    const rendered = await renderNodes({
+      context,
+      page,
+      sheet: A4,
+      nodes: [NODE],
+      origin: { x: 0, y: 0 },
+      assets: ASSETS,
+    });
+    if (!isOk(rendered)) throw new Error(rendered.error.message);
+
+    const bytes = await finish(context);
+    if (!isOk(bytes)) throw new Error('expected bytes');
+    const stream = await decodeContents(bytes.value);
+    // `Do` paints an XObject — the operator an embedded image reduces to.
+    expect(stream).toMatch(/\bDo\b/);
+  });
+
+  it('errors rather than exporting a card with a hole in it', async () => {
+    // Nobody notices a silently dropped logo until the proof comes back.
+    const result = await renderImage(NODE, new Map());
+    expect(isOk(result)).toBe(false);
+    if (!isOk(result)) expect(result.error.code).toBe('PDF_ASSET_MISSING');
+  });
+
+  it('rejects a format PDF cannot carry', async () => {
+    const result = await renderImage(NODE, new Map([['abc', new Uint8Array([0x3c, 0x73])]]));
+    expect(isOk(result)).toBe(false);
+    if (!isOk(result)) expect(result.error.code).toBe('PDF_IMAGE_UNSUPPORTED');
+  });
+
+  it('embeds one copy however many nodes share an asset', async () => {
+    const context = await createPdfDocument();
+    const page = addSheetPage(context, A4, { trim: null });
+    await renderNodes({
+      context,
+      page,
+      sheet: A4,
+      nodes: [NODE, { ...NODE, id: 'j' }, { ...NODE, id: 'k' }],
+      origin: { x: 0, y: 0 },
+      assets: ASSETS,
+    });
+
+    // A logo on 150 place cards must be embedded once, not 150 times.
+    expect(context.images.size).toBe(1);
   });
 });

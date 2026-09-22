@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-22, after Phase 8 (partial: P8.1-P8.3).
+Last audited: 2026-09-22, after Phase 8 complete (P8.1-P8.10).
 
 ---
 
@@ -47,7 +47,8 @@ fires at all.
 ## 2. Blocked on a later phase
 
 ### BLK-1 · Image tool · OPEN (unblocked) · from P3.4
-**Unblocked by P4.1** — the asset store now exists and is content-addressed.
+**Unblocked by P4.1 and P8.4** — the asset store is content-addressed and the
+PDF renderer now embeds PNG/JPEG from bytes handed to it on the export job.
 Still needs: a file input on the toolbar, `FabricImage` construction from
 `objectUrlFor`, retain/release wired to node add/delete, and asset bytes
 collected into `packProject` (currently hardcoded to an empty array in
@@ -56,10 +57,10 @@ collected into `packProject` (currently hardcoded to an empty array in
 - **Accept:** upload an image, place it, resize it; the asset survives a
   `.toke` save/open round trip; two placements of the same file store one blob.
 
-### BLK-2 · Pen / path tool · BLOCKED by P8.2 · from P3.4
+### BLK-2 · Pen / path tool · OPEN (unblocked) · from P3.4
+**Unblocked by P8.2** — `renderNode` now draws a `PathNode` via `drawSvgPath`.
 `PathNode` and the Fabric mapping exist; the drawing interaction does not.
-Large interaction (anchors, bezier handles), and there is no PDF path renderer
-to target until P8.2, so it cannot be verified end to end.
+Large interaction (anchors, bezier handles).
 
 ### BLK-3 · Token-bound indicator in the layers tree · OPEN (unblocked) · from P3.10
 **Unblocked by P6.** `isTokenised(node.text)` now answers this. `LayersPanel`
@@ -210,8 +211,41 @@ or a simpler filter control.
 > "Report per-record: text overflow, unresolved tokens, missing assets."
 
 Overflow, unresolved and empty are covered. Missing assets are not, because
-image placement does not exist yet (BLK-1). A missing font face is also
-unchecked: `getFont` returning null silently skips the fit check.
+image placement does not exist yet (BLK-1) — though the PDF renderer now
+errors with `PDF_ASSET_MISSING` rather than exporting a hole, so the failure
+is loud at export time even without a pre-flight check. A missing font face
+is also unchecked: `getFont` returning null silently skips the fit check.
+
+### INC-23 · Cover images overflow their frame in the PDF · OPEN · P8.4, P8.5
+`fitImage` computes a 'cover' box that deliberately exceeds the frame, and the
+renderer emits no clip path — so a cover image prints past its own bounds.
+Fine today because image placement does not exist (BLK-1), wrong the moment it
+does.
+
+- **Accept:** a cover-fit image is clipped to its frame in the exported PDF.
+
+### INC-24 · Export sends every registered font, not just the used faces · OPEN · P8.8
+`fontsForExport` ships the whole registry across the worker boundary because
+the worker has its own empty registry and a missing fallback face would fail
+mid-render. Subsetting makes the embedded cost near-zero, but the postMessage
+copy is ~218KB per face. Narrow to referenced faces once the scene records
+which it uses.
+
+### INC-25 · Export cancellation is per-sheet, not immediate · KNOWN · P8.8
+`shouldCancel` is checked between sheets. A 50-up sheet takes tens of
+milliseconds, so the delay is imperceptible; finer granularity would mean
+threading a signal through every draw call. Deliberate.
+
+### INC-26 · Export has no memory ceiling · OPEN · P8.8
+The plan's budget is 500 records under 30s and under 1GB. The 30s half is
+asserted in `assemble.golden.test.ts`; memory is not measured anywhere, and
+the whole document is held in memory until `finish`. Streaming incremental
+save is the fix if a run ever exceeds it.
+
+### INC-27 · Proof export is not reachable from the UI · OPEN · P8.9
+`exportProof` and the worker's `proof` op both exist and are tested, but
+nothing in the shell calls them — the Export dialog only runs a full sheet
+export. Needs a "Proof current record" action.
 
 ### INC-20 · Token errors do not reach a diagnostics surface · OPEN · P9.2
 A parse error shows in the binding panel. A resolution error (unknown column
