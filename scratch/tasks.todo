@@ -302,10 +302,11 @@ Fit, Fill and Stretch against the frame, with the frame resizable. There is no
 drag-a-crop-box-over-the-image interaction and no pan-within-frame. Adding one
 means a `cropRect` on `ImageNode` and a `.toke` schemaVersion bump.
 
-### INC-35 · Image resize does not lock aspect · OPEN
-The frame resizes freely; with Fit or Fill the picture stays undistorted
-inside it, but Stretch will distort and nothing warns. A Shift-drag aspect
-lock on the canvas handles is the fix.
+### INC-35 · Image resize does not lock aspect · CLOSED
+Shift-drag on a corner handle locks the aspect ratio, for every object rather
+than only images. Fabric's default was the other way round — corners preserved
+aspect and Shift freed them — which is backwards from every design tool and
+silently distorted a Stretch-fit photo.
 
 
 ### INC-30 · Font weight 500 is not bundled · CLOSED
@@ -377,12 +378,18 @@ never been checked, and that is the case most likely to diverge.
 from a large project has never been produced. Worth a test that fills the
 store.
 
-### VER-5 · Numeric fields during a live drag · OPEN · P3.6
+### VER-5 · Numeric fields during a live drag · CLOSED
 > "Values update live during canvas drag without fighting user input
 > mid-edit."
 
-Fields update on `object:modified` (drag end), not during the drag. The
-"without fighting input" half is satisfied; the "live" half is not.
+Both halves hold now. The canvas publishes a `liveTransform` during a move or
+scale which the inspector prefers over the scene node, so the fields track the
+gesture. It is deliberately NOT the scene graph: writing every mousemove into
+`nodes` would push a command per frame and re-run the store→Fabric sync
+against the object the user is holding.
+
+Asserted mid-gesture with the mouse still down, plus that the committed value
+matches what the drag showed and that a whole drag is still one undo.
 
 ---
 

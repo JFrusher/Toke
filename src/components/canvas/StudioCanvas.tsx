@@ -554,6 +554,8 @@ export function StudioCanvas() {
       // Indicators belong to the gesture; leaving them up afterwards would
       // draw lines through artwork that is no longer moving.
       setSnapMatches([]);
+      // The committed node is the source of truth again.
+      useCanvasStore.getState().setLiveTransform(null);
       commitFromFabric('Transform object');
     }
 
@@ -590,6 +592,34 @@ export function StudioCanvas() {
       // Drawn by the overlay: `matches` has always been returned and nothing
       // ever showed it, so the canvas snapped silently.
       setSnapMatches(result.matches);
+
+      // VER-5: the inspector reads this so its fields track the drag. It is
+      // not the scene graph, so no history entry is pushed per mousemove.
+      store.setLiveTransform({
+        id: movingId,
+        x: result.rect.x,
+        y: result.rect.y,
+        width: result.rect.width,
+        height: result.rect.height,
+      });
+    }
+
+    /** Live geometry while a corner handle is dragged. */
+    function onScaling(event: { target?: fabric.FabricObject }) {
+      const target = event.target;
+      if (target === undefined) return;
+
+      for (const [id, object] of objectsRef.current) {
+        if (object !== target) continue;
+        useCanvasStore.getState().setLiveTransform({
+          id,
+          x: target.left ?? 0,
+          y: target.top ?? 0,
+          width: (target.width ?? 0) * (target.scaleX ?? 1),
+          height: (target.height ?? 0) * (target.scaleY ?? 1),
+        });
+        return;
+      }
     }
 
     function onWheel(event: { e: WheelEvent }) {
@@ -657,6 +687,7 @@ export function StudioCanvas() {
     canvas.on('selection:cleared', onSelection);
     canvas.on('object:modified', onModified);
     canvas.on('object:moving', onMoving);
+    canvas.on('object:scaling', onScaling);
     canvas.on('mouse:wheel', onWheel);
 
     return () => {
@@ -668,6 +699,7 @@ export function StudioCanvas() {
       canvas.off('selection:cleared', onSelection);
       canvas.off('object:modified', onModified);
       canvas.off('object:moving', onMoving);
+      canvas.off('object:scaling', onScaling);
       canvas.off('mouse:wheel', onWheel);
     };
   }, [commitFromFabric]);
@@ -729,6 +761,12 @@ export function StudioCanvas() {
 
     canvas.selection = tool === 'select';
     canvas.defaultCursor = tool === 'select' ? 'default' : 'crosshair';
+
+    // INC-35. Fabric's default is the other way round — corners preserve
+    // aspect and Shift frees them — which is backwards from every design tool
+    // and silently distorts a Stretch-fit photo.
+    canvas.uniformScaling = false;
+    canvas.uniScaleKey = 'shiftKey';
 
     if (tool === 'select') return;
 

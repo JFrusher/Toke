@@ -83,8 +83,24 @@ export function TransformFields() {
   const selection = useCanvasStore((s) => s.selection);
   const replaceNodes = useCanvasStore((s) => s.replaceNodes);
   const unit = useShellStore((s) => s.displayUnit);
+  const live = useCanvasStore((s) => s.liveTransform);
 
-  const selected = nodes.filter((node) => selection.includes(node.id));
+  const selected = nodes
+    .filter((node) => selection.includes(node.id))
+    // VER-5: while an object is being dragged or resized the fields read its
+    // live geometry, so they track the gesture instead of jumping at the end.
+    // The node itself is untouched until the gesture commits.
+    .map((node) =>
+      live !== null && live.id === node.id
+        ? {
+            ...node,
+            x: points(live.x),
+            y: points(live.y),
+            width: points(live.width),
+            height: points(live.height),
+          }
+        : node,
+    );
 
   /** Mixed values read as an em dash rather than showing the first object's
    *  number, which would look editable and be wrong. */
