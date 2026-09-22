@@ -6,6 +6,7 @@ import { CanvasToolbar } from '@/components/canvas/CanvasToolbar';
 import { LayersPanel } from '@/components/canvas/LayersPanel';
 import { CsvImportDialog } from '@/components/data/CsvImportDialog';
 import { DataGrid } from '@/components/data/DataGrid';
+import { SqlConsole } from '@/components/data/SqlConsole';
 import { ExportDialog } from '@/components/imposition/ExportDialog';
 import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
@@ -14,8 +15,10 @@ import { PreflightReport } from '@/components/preview/PreflightReport';
 import { DiagnosticsPanel } from '@/components/shell/DiagnosticsPanel';
 import { FileMenu } from '@/components/shell/FileMenu';
 import { ResizeHandle } from '@/components/shell/ResizeHandle';
+import { TemplateGallery } from '@/components/shell/TemplateGallery';
 import { Button } from '@/components/ui/Button';
 import { installDiagnosticsBridge } from '@/engine/store/diagnosticsBridge';
+import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { useDiagnosticsStore } from '@/engine/store/useDiagnosticsStore';
 import { type BottomTab, LIMITS, useShellStore } from '@/engine/store/useShellStore';
@@ -29,6 +32,7 @@ const StudioCanvas = dynamic(
 
 const TABS: readonly { id: BottomTab; label: string }[] = [
   { id: 'data', label: 'Data' },
+  { id: 'sql', label: 'SQL' },
   { id: 'diagnostics', label: 'Diagnostics' },
 ];
 
@@ -66,6 +70,9 @@ export function AppShell() {
   const [importing, setImporting] = useState(false);
   const [preflighting, setPreflighting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [templates, setTemplates] = useState(false);
+
+  const isEmpty = useCanvasStore((s) => s.nodes.length === 0);
 
   // After mount, not during render: the server has no localStorage, and a
   // first paint at the saved width followed by React's own would be the layout
@@ -115,6 +122,9 @@ export function AppShell() {
                 something happened, which is the least useful thing to say. */}
             <span data-numeric>Issues {errorCount}</span>
           </Button>
+          <Button onClick={() => setTemplates(true)} data-testid="open-templates" variant="quiet">
+            Templates
+          </Button>
           <Button onClick={() => setImporting(true)} data-testid="open-import">
             Import CSV
           </Button>
@@ -147,8 +157,22 @@ export function AppShell() {
           </>
         )}
 
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
           <StudioCanvas />
+
+          {isEmpty && (
+            /* A prompt, not an auto-opening modal: a dialog that appears
+               unbidden on load is in the way of anyone who knows what they
+               are doing. */
+            <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-6">
+              <div className="pointer-events-auto flex items-center gap-2 rounded-[4px] border border-hairline-strong bg-panel px-3 py-2">
+                <span className="text-[12px] text-ink-muted">Empty artboard.</span>
+                <Button onClick={() => setTemplates(true)} data-testid="empty-templates">
+                  Start from a template
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {rightOpen && (
@@ -234,6 +258,8 @@ export function AppShell() {
             >
               {bottomTab === 'diagnostics' ? (
                 <DiagnosticsPanel />
+              ) : bottomTab === 'sql' ? (
+                <SqlConsole />
               ) : (
                 <>
                   {dataError !== null && (
@@ -256,6 +282,7 @@ export function AppShell() {
       <CsvImportDialog open={importing} onClose={() => setImporting(false)} />
       <PreflightReport open={preflighting} onClose={() => setPreflighting(false)} />
       <ExportDialog open={exporting} onClose={() => setExporting(false)} />
+      <TemplateGallery open={templates} onClose={() => setTemplates(false)} />
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { openDock } from './helpers';
+import { importCsv, openDock } from './helpers';
 
 /**
  * Live Mode over the design's record source, and the pre-export scan.
@@ -23,17 +23,6 @@ async function ready(page: Page) {
   });
 }
 
-async function importGuests(page: Page, csv = GUESTS) {
-  await page.getByTestId('open-import').click();
-  await page.getByTestId('csv-file').setInputFiles({
-    name: 'guests.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from(csv, 'utf8'),
-  });
-  await page.getByTestId('csv-confirm').click();
-  await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 20_000 });
-}
-
 async function bindText(page: Page, template: string) {
   await page.getByTestId('tool-text').click();
   const box = await page.getByTestId('canvas-viewport').boundingBox();
@@ -46,7 +35,7 @@ async function bindText(page: Page, template: string) {
 
 test('the cycle bar walks the record source', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await page.getByTestId('mode-live').click();
 
   await expect(page.getByTestId('record-counter')).toHaveText('1 / 3');
@@ -60,7 +49,7 @@ test('the cycle bar walks the record source', async ({ page }) => {
 
 test('end controls disable at the ends rather than wrapping', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await page.getByTestId('mode-live').click();
 
   await expect(page.getByRole('button', { name: 'Previous record' })).toBeDisabled();
@@ -70,7 +59,7 @@ test('end controls disable at the ends rather than wrapping', async ({ page }) =
 
 test('search jumps to a matching record', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await page.getByTestId('mode-live').click();
 
   await page.getByTestId('record-search').fill('Bartholomew');
@@ -80,7 +69,7 @@ test('search jumps to a matching record', async ({ page }) => {
 
 test('a search that matches nothing keeps the current record', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await page.getByTestId('mode-live').click();
 
   await page.getByRole('button', { name: 'Next record' }).click();
@@ -97,7 +86,7 @@ test('pre-flight reports a clean run when every value fits', async ({ page }) =>
   // 34pt — so a long surname legitimately overflows it, which the next test
   // covers.
   await ready(page);
-  await importGuests(page, SHORT_NAMES);
+  await importCsv(page, SHORT_NAMES);
   await bindText(page, '{{ first_name }}');
 
   await page.getByTestId('open-preflight').click();
@@ -109,7 +98,7 @@ test('pre-flight catches a name that will not fit the box', async ({ page }) => 
   // The headline value: "Bartholomew" in a box drawn for "Text" cannot shrink
   // far enough, and nobody would notice until the cards were printed.
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await bindText(page, '{{ first_name }}');
 
   await page.getByTestId('open-preflight').click();
@@ -123,7 +112,7 @@ test('pre-flight catches a name that will not fit the box', async ({ page }) => 
 
 test('pre-flight flags an unresolvable column', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await bindText(page, '{{ nonexistent }}');
 
   await page.getByTestId('open-preflight').click();
@@ -136,7 +125,7 @@ test('a malformed binding is reported, not skipped', async ({ page }) => {
   // so a naive scan skips the node and calls the run clean while that object
   // prints nothing.
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await bindText(page, '{{ first_name | shout }}');
 
   await page.getByTestId('open-preflight').click();
@@ -145,7 +134,7 @@ test('a malformed binding is reported, not skipped', async ({ page }) => {
 
 test('selecting a finding jumps to that record in Live Mode', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await bindText(page, '{{ nonexistent }}');
 
   await page.getByTestId('open-preflight').click();
@@ -158,7 +147,7 @@ test('selecting a finding jumps to that record in Live Mode', async ({ page }) =
 
 test('pre-flight does not block, it warns', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await bindText(page, '{{ nonexistent }}');
 
   await page.getByTestId('open-preflight').click();
@@ -173,7 +162,7 @@ test('pre-flight does not block, it warns', async ({ page }) => {
 
 test('Live Mode previews the record source, not the whole table', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
 
   // Default source is every guest; the grid shows the same three.
   await page.getByTestId('mode-live').click();

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /**
  * Shared steps for the studio shell.
@@ -22,4 +22,23 @@ export function openDock(page: Page) {
 /** Closes the bottom dock whether or not it was already hidden. */
 export function closeDock(page: Page) {
   return ensurePressed(page, 'toggle-data', false);
+}
+
+/**
+ * Imports a CSV through the real dialog.
+ *
+ * The budget is deliberately generous: each spec boots its own SQLite WASM
+ * worker, and with parallel workers on a loaded machine an import that takes
+ * under a second in isolation can take tens of seconds. A tight timeout here
+ * fails tests for machine load rather than for anything in the product.
+ */
+export async function importCsv(page: Page, csv: string, name = 'guests.csv') {
+  await page.getByTestId('open-import').click();
+  await page.getByTestId('csv-file').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv, 'utf8'),
+  });
+  await page.getByTestId('csv-confirm').click();
+  await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 45_000 });
 }

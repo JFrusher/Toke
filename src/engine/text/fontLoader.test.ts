@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   fontBytes,
   PLEX_SANS_BOLD,
@@ -116,5 +116,59 @@ describe('fontKey', () => {
     // CSS font matching is case insensitive; a scene node saying "ibm plex
     // sans" must find the registered face.
     expect(fontKey('IBM Plex Sans', 400, false)).toBe(fontKey('ibm plex sans', 400, false));
+  });
+});
+
+describe('weight fallback', () => {
+  const FAMILY = 'IBM Plex Sans';
+  const regularOf = () => load(PLEX_SANS_REGULAR, { family: FAMILY, weight: 400 });
+  const boldOf = () => load(PLEX_SANS_BOLD, { family: FAMILY, weight: 600 });
+  const italicOf = () => load(PLEX_SANS_ITALIC, { family: FAMILY, weight: 400, italic: true });
+
+  beforeEach(() => {
+    clearFonts();
+  });
+
+  it('prefers an exact match', () => {
+    const regular = regularOf();
+    const bold = boldOf();
+    registerFont(regular);
+    registerFont(bold);
+
+    expect(getFont(FAMILY, 600, false)).toBe(bold);
+  });
+
+  it('falls back to the nearest weight in the same family', () => {
+    // A design built against a font set this build does not ship — weight 500,
+    // say — must still measure and print rather than failing at export.
+    const regular = regularOf();
+    const bold = boldOf();
+    registerFont(regular);
+    registerFont(bold);
+
+    // 500 is equidistant from 400 and 600; the first registered wins, which
+    // is the lighter face and the safer default for a text weight.
+    expect(getFont(FAMILY, 500, false)).toBe(regular);
+
+    clearFonts();
+    registerFont(bold);
+    expect(getFont(FAMILY, 400, false)).toBe(bold);
+  });
+
+  it('keeps the slant in preference to the weight', () => {
+    const regular = regularOf();
+    const italic = italicOf();
+    expect(regular).not.toBe(italic);
+    registerFont(regular);
+    registerFont(italic);
+
+    expect(getFont(FAMILY, 600, true)).toBe(italic);
+  });
+
+  it('never substitutes a different family', () => {
+    // A different family has unrelated metrics; measuring against one and
+    // printing another is the failure this whole module exists to prevent.
+    registerFont(regularOf());
+    expect(getFont('Helvetica', 400, false)).toBeNull();
   });
 });

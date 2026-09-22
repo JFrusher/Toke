@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createDbClient, type DbClient } from '@/engine/db/client';
 import type { ImportMode, ImportPlan, ImportReport } from '@/engine/db/import';
-import type { Row, SqlValue } from '@/engine/db/protocol';
+import type { QueryResult, Row, SqlValue } from '@/engine/db/protocol';
 import { assertReadOnly, type ColumnSchema, columnSchemaForRows } from '@/engine/db/recordSource';
 import { type TableColumn, toTableColumns } from '@/engine/db/schema';
 import { createWorkerTransport } from '@/engine/db/workerTransport';
@@ -52,6 +52,14 @@ type DataState = {
   addRow: () => Promise<void>;
   deleteRow: (id: number) => Promise<void>;
   setRecordSource: (sql: string) => Promise<void>;
+  /**
+   * Runs an ad-hoc query for the SQL console.
+   *
+   * Returns a Result rather than storing one: a console query is a one-off
+   * the user is looking at, not app state, and putting it in the store would
+   * re-render every subscriber for a result only one panel reads.
+   */
+  query: (sql: string) => Promise<Result<QueryResult>>;
   refreshRecords: () => Promise<void>;
   exportDatabase: () => Promise<Uint8Array>;
   loadDatabase: (bytes: Uint8Array) => Promise<void>;
@@ -119,6 +127,10 @@ export const useDataStore = create<DataState>((set, get) => ({
     // The record source reads the same database, so it has to be re-run
     // whenever the table changes or the preview goes stale.
     await get().refreshRecords();
+  },
+
+  query(sql) {
+    return ensureClient().query(sql);
   },
 
   async setRecordSource(sql) {

@@ -48,13 +48,27 @@ describe('sql.js containment', () => {
   });
 
   it('keeps raw SQL out of components', () => {
+    // The SQL console is the one deliberate exception: its whole purpose is to
+    // let the user type a statement. It still goes through the typed RPC and
+    // through assertReadOnly, so the rule that matters — no database handle
+    // outside the worker — holds.
+    const allowed = new Set(['components/data/SqlConsole.tsx']);
     const sqlKeyword = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE)\b/;
     const offenders = FILES.filter(
       ({ path, source }) =>
-        path.startsWith('components/') && !path.includes('.test.') && sqlKeyword.test(source),
+        path.startsWith('components/') &&
+        !path.includes('.test.') &&
+        !allowed.has(path) &&
+        sqlKeyword.test(source),
     ).map(({ path }) => path);
 
     expect(offenders).toEqual([]);
+  });
+
+  it('the SQL console reaches the database only through the worker', () => {
+    const consoleFile = FILES.find(({ path }) => path === 'components/data/SqlConsole.tsx');
+    expect(consoleFile).toBeDefined();
+    expect(consoleFile?.source).not.toMatch(/sql\.js|openDatabase|engine\/db\/database/);
   });
 });
 

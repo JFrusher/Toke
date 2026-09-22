@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { importCsv } from './helpers';
 
 /**
  * Imposition setup and PDF export, end to end in a real browser.
@@ -16,17 +17,6 @@ async function ready(page: Page) {
   await expect(page.getByTestId('canvas-viewport')).toHaveAttribute('data-fonts-ready', 'true', {
     timeout: 20_000,
   });
-}
-
-async function importGuests(page: Page) {
-  await page.getByTestId('open-import').click();
-  await page.getByTestId('csv-file').setInputFiles({
-    name: 'guests.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from(GUESTS, 'utf8'),
-  });
-  await page.getByTestId('csv-confirm').click();
-  await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 20_000 });
 }
 
 test('shows the sheet yield for the current artboard', async ({ page }) => {
@@ -50,7 +40,7 @@ test('changing the sheet changes the yield', async ({ page }) => {
 
 test('exports a PDF of the imported records', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
 
   await page.getByTestId('open-export').click();
 

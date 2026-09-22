@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { importCsv } from './helpers';
 
 /**
  * The diagnostics panel: nothing fails silently.
@@ -20,17 +21,6 @@ async function ready(page: Page) {
 
 const GUESTS = ['first_name,last_name', 'Ada,Lovelace', 'Grace,Hopper'].join('\n');
 
-async function importGuests(page: Page) {
-  await page.getByTestId('open-import').click();
-  await page.getByTestId('csv-file').setInputFiles({
-    name: 'guests.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from(GUESTS, 'utf8'),
-  });
-  await page.getByTestId('csv-confirm').click();
-  await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 20_000 });
-}
-
 /**
  * Places a text object and binds it to a column that does not exist.
  *
@@ -38,7 +28,7 @@ async function importGuests(page: Page) {
  * the token engine has nothing to fail on and reports nothing.
  */
 async function bindUnknownColumn(page: Page) {
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await page.getByTestId('tool-text').click();
   const box = await page.getByTestId('canvas-viewport').boundingBox();
   if (box === null) throw new Error('viewport has no box');
@@ -151,6 +141,10 @@ test('dock tabs are operable with arrow keys', async ({ page }) => {
 
   await page.getByTestId('dock-tab-diagnostics').focus();
   await page.keyboard.press('ArrowLeft');
+  // Data, SQL, Diagnostics — one step left of Diagnostics is SQL.
+  await expect(page.getByTestId('dock-tab-sql')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('dock-tab-sql')).toBeFocused();
+
+  await page.keyboard.press('ArrowLeft');
   await expect(page.getByTestId('dock-tab-data')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('dock-tab-data')).toBeFocused();
 });

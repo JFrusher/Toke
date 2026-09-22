@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
+import { importCsv } from './helpers';
 
 /**
  * Binding a design to data, end to end: import a guest list, bind a text
@@ -21,21 +22,6 @@ async function ready(page: Page) {
   await expect(page.getByTestId('canvas-viewport')).toHaveAttribute('data-fonts-ready', 'true', {
     timeout: 20_000,
   });
-}
-
-async function importGuests(page: Page, csv = GUESTS) {
-  await page.getByTestId('open-import').click();
-  await page.getByTestId('csv-file').setInputFiles({
-    name: 'guests.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from(csv, 'utf8'),
-  });
-  await page.getByTestId('csv-confirm').click();
-  // showModal() makes the rest of the page inert, so every later click is
-  // blocked until the dialog actually closes. Generous timeout: under the
-  // parallel run the worker, SQLite and the migration all contend, and the
-  // import genuinely takes longer than the 5s default.
-  await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 20_000 });
 }
 
 async function placeTextAndSelect(page: Page) {
@@ -63,7 +49,7 @@ test('columns added by an import become bindable', async ({ page }) => {
   await placeTextAndSelect(page);
   await expect(page.getByTestId('insert-nickname')).toHaveCount(0);
 
-  await importGuests(page, WITH_NICKNAME);
+  await importCsv(page, WITH_NICKNAME);
   await page.getByRole('treeitem').getByRole('button').click();
 
   await expect(page.getByTestId('insert-nickname')).toBeVisible();
@@ -71,7 +57,7 @@ test('columns added by an import become bindable', async ({ page }) => {
 
 test('inserting a field writes a token and marks the object bound', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await placeTextAndSelect(page);
 
   await page.getByTestId('insert-first_name').click();
@@ -82,7 +68,7 @@ test('inserting a field writes a token and marks the object bound', async ({ pag
 
 test('Token Mode shows the template, Live Mode shows the data', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await placeTextAndSelect(page);
 
   await page.getByTestId('binding-text').fill('{{ first_name }} {{ last_name }}');
@@ -97,7 +83,7 @@ test('Token Mode shows the template, Live Mode shows the data', async ({ page })
 
 test('cycling records changes which values render', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await placeTextAndSelect(page);
 
   await page.getByTestId('binding-text').fill('{{ first_name }}');
@@ -111,7 +97,7 @@ test('cycling records changes which values render', async ({ page }) => {
 
 test('the record cursor clamps rather than wrapping', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await page.getByTestId('mode-live').click();
 
   // The cycle bar disables the end controls, which is the clamp made visible
@@ -126,7 +112,7 @@ test('the record cursor clamps rather than wrapping', async ({ page }) => {
 
 test('an unknown column is reported, not silently blank', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await placeTextAndSelect(page);
 
   await page.getByTestId('binding-text').fill('{{ nonexistent_column }}');
@@ -140,7 +126,7 @@ test('an unknown column is reported, not silently blank', async ({ page }) => {
 
 test('an unknown formatter is reported in the panel', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await placeTextAndSelect(page);
 
   await page.getByTestId('binding-text').fill('{{ first_name | shout }}');
@@ -163,7 +149,7 @@ test('auto-fit mode is selectable and persists', async ({ page }) => {
 
 test('a fallback fills an empty value', async ({ page }) => {
   await ready(page);
-  await importGuests(page, 'first_name,last_name,nickname\nAda,Lovelace,\nGrace,Hopper,Amazing');
+  await importCsv(page, 'first_name,last_name,nickname\nAda,Lovelace,\nGrace,Hopper,Amazing');
   await placeTextAndSelect(page);
 
   await page.getByTestId('binding-text').fill('{{ nickname }}');
@@ -177,7 +163,7 @@ test('a fallback fills an empty value', async ({ page }) => {
 
 test('binding survives a save and reopen', async ({ page }) => {
   await ready(page);
-  await importGuests(page);
+  await importCsv(page, GUESTS);
   await placeTextAndSelect(page);
 
   await page.getByTestId('binding-text').fill('{{ first_name | upper }}');

@@ -128,8 +128,41 @@ export function registerFont(font: LoadedFont): void {
   registry.set(fontKey(font.cssFamily, font.weight, font.italic), font);
 }
 
+/**
+ * The face a design should be measured and printed with.
+ *
+ * An exact match wins. Failing that, the nearest weight in the same family
+ * falls back — NOT a different family. Returning null instead would make a
+ * design that references an unbundled weight (500, say) measure as nothing on
+ * canvas and hard-fail at export, which is what happens to any `.toke` built
+ * against a font set the current build does not ship.
+ *
+ * The fallback is safe precisely because it lives here: canvas auto-fit and
+ * the PDF renderer both come through this function, so they cannot disagree
+ * about which file they got. Substituting a different FAMILY would change
+ * metrics unpredictably and is still refused.
+ */
 export function getFont(family: string, weight: FontWeight, italic: boolean): LoadedFont | null {
-  return registry.get(fontKey(family, weight, italic)) ?? null;
+  const exact = registry.get(fontKey(family, weight, italic));
+  if (exact !== undefined) return exact;
+
+  // cssFamily only, never the file's own `family`: a TrueType SemiBold calls
+  // itself "IBM Plex Sans SemiBold", and letting that resolve is precisely the
+  // lookup bug P5 fixed. Case-insensitive, as CSS font matching is.
+  const wanted = family.toLowerCase();
+  const sameFamily = [...registry.values()].filter(
+    (font) => font.cssFamily.toLowerCase() === wanted,
+  );
+  if (sameFamily.length === 0) return null;
+
+  // Prefer the same slant; an upright substituted for an italic is a bigger
+  // visual change than one weight step.
+  const candidates = sameFamily.filter((font) => font.italic === italic);
+  const pool = candidates.length > 0 ? candidates : sameFamily;
+
+  return pool.reduce((best, font) =>
+    Math.abs(font.weight - weight) < Math.abs(best.weight - weight) ? font : best,
+  );
 }
 
 export function registeredFonts(): readonly LoadedFont[] {
