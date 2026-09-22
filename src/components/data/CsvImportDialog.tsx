@@ -2,12 +2,13 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { parseCsv, proposeMapping } from '@/engine/db/csv';
 import type { ImportMode } from '@/engine/db/import';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { isErr, isOk } from '@/lib/result';
 
 const PREVIEW_ROWS = 8;
@@ -26,6 +27,15 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
   const csv = parsed !== null && isOk(parsed) ? parsed.value : null;
   const parseError = parsed !== null && isErr(parsed) ? parsed.error : null;
   const mapping = csv === null ? [] : proposeMapping(csv.columns, columns);
+
+  // Reported from an effect, not from the render that derives it: a store
+  // write during render is a React violation, and keying on the message
+  // rather than the object stops parseCsv's fresh error inflating the count.
+  const parseMessage = parseError?.message ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the message, so re-parsing the same text reports once rather than per render
+  useEffect(() => {
+    if (parseError !== null) reportDiagnostic('import', 'error', parseError);
+  }, [parseMessage]);
 
   function reset() {
     setText(null);
@@ -49,6 +59,7 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
       const result = await runImport(text, mode);
       if (isErr(result)) {
         setProblem(result.error.message);
+        reportDiagnostic('import', 'error', result.error);
         return;
       }
       reset();
@@ -57,7 +68,9 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
       // Without this, a rejection leaves `busy` true and the dialog open with
       // no message — the user is stuck in a modal that never resolves and has
       // no idea why.
-      setProblem(error instanceof Error ? error.message : 'The import failed.');
+      const message = error instanceof Error ? error.message : 'The import failed.';
+      setProblem(message);
+      reportDiagnostic('import', 'error', { code: 'CSV_IMPORT_FAILED', message });
     } finally {
       setBusy(false);
     }

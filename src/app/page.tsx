@@ -1,28 +1,10 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
-import { CanvasToolbar } from '@/components/canvas/CanvasToolbar';
-import { LayersPanel } from '@/components/canvas/LayersPanel';
-import { CsvImportDialog } from '@/components/data/CsvImportDialog';
-import { DataGrid } from '@/components/data/DataGrid';
-import { ExportDialog } from '@/components/imposition/ExportDialog';
-import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
-import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
-import { TransformFields } from '@/components/inspector/TransformFields';
-import { PreflightReport } from '@/components/preview/PreflightReport';
-import { FileMenu } from '@/components/shell/FileMenu';
-import { Button } from '@/components/ui/Button';
+import { useEffect } from 'react';
+import { AppShell } from '@/components/shell/AppShell';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { points } from '@/engine/units/types';
-
-// Fabric touches document/window at import time, so the canvas never renders
-// on the server.
-const StudioCanvas = dynamic(
-  () => import('@/components/canvas/StudioCanvas').then((m) => m.StudioCanvas),
-  { ssr: false, loading: () => <div className="h-full w-full bg-pasteboard" /> },
-);
 
 const NUDGE = 1;
 const NUDGE_LARGE = 10;
@@ -41,15 +23,14 @@ function isTextEntry(target: EventTarget | null): boolean {
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 }
 
+/**
+ * The client boundary, and nothing else.
+ *
+ * Layout lives in `AppShell`; this owns only what must be bound to the window
+ * itself — the database handle and the global shortcuts.
+ */
 export default function StudioPage() {
-  const dataStatus = useDataStore((s) => s.status);
-  const dataError = useDataStore((s) => s.error);
   const openDatabase = useDataStore((s) => s.open);
-
-  const [importing, setImporting] = useState(false);
-  const [showData, setShowData] = useState(false);
-  const [preflighting, setPreflighting] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void openDatabase();
@@ -62,6 +43,14 @@ export default function StudioPage() {
       // Never steal keys from a text field — typing "r" in a name should not
       // switch to the rectangle tool.
       if (isTextEntry(event.target)) return;
+
+      // Nor from a resize handle, which owns its own arrow keys.
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.getAttribute('role') === 'separator'
+      ) {
+        return;
+      }
 
       const modifier = event.ctrlKey || event.metaKey;
 
@@ -107,61 +96,5 @@ export default function StudioPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  return (
-    <main className="flex h-dvh flex-col bg-panel">
-      <header className="flex shrink-0 flex-wrap items-center gap-3 border-hairline-strong border-b px-3 py-2">
-        <h1 className="font-semibold text-[13px] tracking-tight">toke</h1>
-        <FileMenu />
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button onClick={() => setShowData((open) => !open)} data-testid="toggle-data">
-            {showData ? 'Hide data' : 'Show data'}
-          </Button>
-          <Button onClick={() => setImporting(true)} data-testid="open-import">
-            Import CSV
-          </Button>
-          <Button onClick={() => setExporting(true)} data-testid="open-export">
-            Export PDF
-          </Button>
-        </div>
-      </header>
-
-      <CanvasToolbar onPreflight={() => setPreflighting(true)} />
-
-      <div className="flex min-h-0 flex-1">
-        <aside className="flex w-56 shrink-0 flex-col border-hairline-strong border-r bg-panel">
-          <LayersPanel />
-        </aside>
-
-        <div className="min-w-0 flex-1">
-          <StudioCanvas />
-        </div>
-
-        <aside className="w-60 shrink-0 overflow-auto border-hairline-strong border-l bg-panel">
-          <TransformFields />
-          <TokenBindingPanel />
-          <ImpositionPanel />
-        </aside>
-      </div>
-
-      {showData && (
-        <section className="h-64 shrink-0 border-hairline-strong border-t">
-          {dataError !== null && (
-            <p role="alert" className="px-3 py-2 text-[12px] text-overflow">
-              {dataError.message}
-            </p>
-          )}
-          {dataStatus === 'ready' ? (
-            <DataGrid />
-          ) : (
-            <p className="p-3 text-[12px] text-ink-muted">Starting the database…</p>
-          )}
-        </section>
-      )}
-
-      <CsvImportDialog open={importing} onClose={() => setImporting(false)} />
-      <PreflightReport open={preflighting} onClose={() => setPreflighting(false)} />
-      <ExportDialog open={exporting} onClose={() => setExporting(false)} />
-    </main>
-  );
+  return <AppShell />;
 }

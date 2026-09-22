@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openDock } from './helpers';
 
 /**
  * Drives the data layer through the real browser: Worker boot, sql.js WASM
@@ -16,7 +17,7 @@ const GUESTS = [
 /** The data panel is collapsed by default in the studio shell. */
 async function openGrid(page: import('@playwright/test').Page) {
   await page.goto('/');
-  await page.getByTestId('toggle-data').click();
+  await openDock(page);
   await expect(page.getByRole('grid')).toBeVisible({ timeout: 20_000 });
 }
 

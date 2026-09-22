@@ -15,6 +15,7 @@ import { DEFAULT_RECORD_SOURCE, fromProject, toProject } from '@/engine/persiste
 import { packProject, unpackProject } from '@/engine/persistence/tokeFile';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
 import { isErr } from '@/lib/result';
@@ -59,7 +60,10 @@ export function FileMenu() {
         savedAt: new Date().toISOString(),
         payload: await buildBytes(),
       }),
-      onError: (error) => setProblem(error),
+      onError: (error) => {
+        setProblem(error);
+        reportDiagnostic('autosave', 'error', error);
+      },
     });
     autosaveRef.current = autosave;
 
@@ -135,10 +139,12 @@ export function FileMenu() {
       await markCleanExit();
       setDirty(false);
     } catch (error) {
-      setProblem({
+      const failure = {
         code: 'TOKE_WRITE_FAILED',
         message: error instanceof Error ? error.message : 'Could not save the project.',
-      });
+      } as const;
+      setProblem(failure);
+      reportDiagnostic('project', 'error', failure);
     } finally {
       setBusy(false);
     }

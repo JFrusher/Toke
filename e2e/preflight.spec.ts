@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { openDock } from './helpers';
 
 /**
  * Live Mode over the design's record source, and the pre-export scan.
@@ -178,6 +179,6 @@ test('Live Mode previews the record source, not the whole table', async ({ page 
   await page.getByTestId('mode-live').click();
   await expect(page.getByTestId('record-counter')).toHaveText('1 / 3');
 
-  await page.getByTestId('toggle-data').click();
+  await openDock(page);
   await expect(page.getByRole('grid')).toContainText('3 records');
 });

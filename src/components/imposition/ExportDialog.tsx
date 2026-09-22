@@ -7,6 +7,7 @@ import { designSpec, sheetPreset } from '@/engine/imposition/specs';
 import { downloadPdf, serialiseForExport, startExport } from '@/engine/pdf/exportClient';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { useImpositionStore } from '@/engine/store/useImpositionStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
@@ -67,6 +68,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
 
     if (isErr(result)) {
       setError(result.error);
+      reportDiagnostic('export', 'error', result.error);
       return;
     }
 

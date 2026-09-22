@@ -15,6 +15,7 @@ export type ErrorCode =
   | 'EXPORT_CANCELLED'
   | 'EXPORT_BUSY'
   | 'EXPORT_FAILED'
+  | 'TEXT_OVERFLOW'
   | 'PDF_FONT_EMBED_FAILED'
   | 'PDF_WRITE_FAILED'
   | 'TOKEN_EMPTY'

@@ -8,6 +8,7 @@ import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factor
 import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { MAX_ZOOM, MIN_ZOOM, type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
 import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
 import { measureText } from '@/engine/text/measure';
@@ -110,12 +111,27 @@ export function withMeasuredSize(node: SceneNode): SceneNode {
 function textPresentation(node: SceneNode, mode: StudioMode, row: Record<string, unknown> | null) {
   if (node.kind !== 'text') return null;
 
-  return renderTextNode({
+  const shown = renderTextNode({
     node,
     font: getFont(node.fontFamily, node.fontWeight, node.italic),
     mode,
     row,
   });
+
+  // The object falls back to its template so the canvas still draws, but the
+  // reason must not vanish with it — an unresolved token that renders quietly
+  // as "{{ guest }}" is a card that prints wrong.
+  if (shown.error !== null) reportDiagnostic('tokens', 'error', shown.error);
+  if (shown.overflow) {
+    reportDiagnostic('auto-fit', 'warning', {
+      code: 'TEXT_OVERFLOW',
+      message: `"${shown.text}" does not fit its box at the minimum size.`,
+      hint: 'Widen the box, lower the minimum size, or shorten the value.',
+      objectId: node.id,
+    });
+  }
+
+  return shown;
 }
 
 function buildFabricObject(

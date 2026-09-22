@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
+import { openDock } from './helpers';
 
 /**
  * Proves a design survives a real .toke file: packed in the browser,
@@ -101,7 +102,7 @@ test('imported guest data survives the round trip', async ({ page }) => {
   // migration and now the record-source query all contend.
   await expect(page.getByTestId('csv-file')).not.toBeVisible({ timeout: 20_000 });
 
-  await page.getByTestId('toggle-data').click();
+  await openDock(page);
   await expect(page.getByRole('grid')).toContainText('Lovelace', { timeout: 20_000 });
 
   const download = page.waitForEvent('download');
@@ -115,7 +116,7 @@ test('imported guest data survives the round trip', async ({ page }) => {
     buffer: bytes,
   });
 
-  await page.getByTestId('toggle-data').click();
+  await openDock(page);
   // The SQLite file travelled inside the zip, not just the scene graph.
   await expect(page.getByRole('grid')).toContainText('Lovelace', { timeout: 20_000 });
   await expect(page.getByRole('grid')).toContainText('Hopper');
