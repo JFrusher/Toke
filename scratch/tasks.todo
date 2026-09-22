@@ -39,14 +39,23 @@ The viewport exposes `data-fabric-objects`, so browser tests can assert what
 Fabric actually holds rather than what the tree claims. Two regression tests
 cover place/undo and group/ungroup.
 
-### DEF-2 · Canvas text edits may not reach the store · OPEN · medium
-Double-clicking an `IText` enters Fabric's editor. `commitFromFabric` reads
-`object.text` on `object:modified`, but Fabric emits `text:changed` and
-`editing:exited` for text edits and it is unverified that `object:modified`
-fires at all.
+### DEF-2 · Canvas text edits may not reach the store · CLOSED · not a defect
+Investigated and disproved. `object:modified` does fire when Fabric's text
+editor is exited, `commitFromFabric` reads `object.text`, and the edit reaches
+the scene node — which is what the PDF renders.
 
-- **Accept:** double-click a text object, type, click away; the new string
-  survives an undo/redo round trip and appears in the layers tree.
+Two things the investigation turned up that were worth writing down:
+
+- Fabric enters editing on a click against an **already-selected** text
+  object, not on a double-click. A text node is placed with its top-left at
+  the click point, so clicking that same point again lands on the top-left
+  resize handle: the object never sees a mousedown and never enters editing.
+- Keystrokes typed while no editor is open reach the window shortcut handler,
+  so "Rectangle" would switch tools four times. `isTextEntry` already guards
+  this once Fabric's textarea exists.
+
+Covered by `e2e/textedit.spec.ts`: entering the editor, the edit reaching the
+node, an undo/redo round trip, and that typing does not fire tool shortcuts.
 
 ---
 
