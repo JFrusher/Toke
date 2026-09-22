@@ -49,6 +49,22 @@ type CanvasState = Document & {
   readonly panY: number;
   readonly tool: Tool;
   readonly guides: readonly Guide[];
+  /**
+   * Geometry of the object being dragged or resized, live.
+   *
+   * Deliberately NOT the scene graph: writing every mousemove into `nodes`
+   * would push a command per frame, re-run the store→Fabric sync against the
+   * object the user is holding, and fight the gesture. The inspector reads
+   * this when it is set and the scene node when it is not, so the fields track
+   * a drag without the drag touching history.
+   */
+  readonly liveTransform: {
+    readonly id: NodeId;
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  } | null;
   readonly snapEnabled: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
@@ -64,7 +80,10 @@ type CanvasState = Document & {
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
   zoomToFit: (viewport: { width: number; height: number }) => void;
+  setLiveTransform: (live: CanvasState['liveTransform']) => void;
   addGuide: (guide: Guide) => void;
+  removeGuide: (id: string) => void;
+  clearGuides: () => void;
   setSnapEnabled: (enabled: boolean) => void;
 
   align: (edge: AlignEdge) => void;
@@ -123,6 +142,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
   function mapSelection(
     transform: (selected: readonly SceneNode[]) => readonly SceneNode[],
     label: string,
+    coalesceKey?: string,
   ) {
     const selected = selectedNodes();
     if (selected.length === 0) return;
@@ -132,6 +152,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
       replace(
         get().nodes.map((node) => updated.get(node.id) ?? node),
         label,
+        coalesceKey,
       ),
     );
   }
@@ -144,6 +165,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     panY: 0,
     tool: 'select',
     guides: [],
+    liveTransform: null,
     snapEnabled: true,
     canUndo: false,
     canRedo: false,
@@ -196,6 +218,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         (selected) =>
           selected.map((node) => ({ ...node, x: points(node.x + dx), y: points(node.y + dy) })),
         'Move object',
+        // Held arrow keys are one gesture, not one command per keypress.
+        // Keyed on the selection so nudging a different object starts a new
+        // entry rather than merging into the previous object's move.
+        `nudge:${get().selection.join(',')}`,
       );
     },
 
@@ -219,7 +245,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
       });
     },
 
+    setLiveTransform: (liveTransform) => set({ liveTransform }),
     addGuide: (guide) => set({ guides: [...get().guides, guide] }),
+    // Guides are not history: they are scaffolding the user puts up and takes
+    // down, and filling the undo stack with them would bury the edits that
+    // matter.
+    removeGuide: (id) => set({ guides: get().guides.filter((guide) => guide.id !== id) }),
+    clearGuides: () => set({ guides: [] }),
     setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
 
     align(edge) {
