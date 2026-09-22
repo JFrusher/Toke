@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-22, after Phase 8 complete (P8.1-P8.10).
+Last audited: 2026-09-22, after Phase 9 complete (P9.1-P9.7). All 63 plan tasks done.
 
 ---
 
@@ -68,7 +68,7 @@ still hardcodes `const bound = false`; the inspector shows a bound badge but
 the layer tree does not. Render the `--bound` colour **plus** a text label —
 CLAUDE.md §4.7 forbids signalling state by colour alone.
 
-### BLK-4 · Diagnostics panel wiring · BLOCKED by P9.2 · from P2.1, P3
+### BLK-4 · Diagnostics panel wiring · CLOSED by P9.2 · from P2.1, P3
 Errors currently surface as one-off `role="alert"` paragraphs. Every
 `AppError` already carries `objectId`; nothing consumes it yet.
 
@@ -247,10 +247,46 @@ save is the fix if a run ever exceeds it.
 nothing in the shell calls them — the Export dialog only runs a full sheet
 export. Needs a "Proof current record" action.
 
-### INC-20 · Token errors do not reach a diagnostics surface · OPEN · P9.2
-A parse error shows in the binding panel. A resolution error (unknown column
-in Live Mode) is returned by `renderTextNode` and then dropped: the object
-falls back to its template and nothing tells the user why.
+### INC-28 · SQL console highlighting has no parser · KNOWN · P9.3
+Token-level colouring over a transparent textarea. A keyword inside an
+unterminated string still colours, and there is no bracket matching or
+completion. Deliberate: the alternative is CodeMirror 6 and its dependency
+tree for features the console does not need. Revisit only if the console grows
+into an editor people write long queries in.
+
+### INC-29 · Templates are TypeScript, not .toke files · KNOWN · P9.4
+The plan specified `public/templates/*.toke`. A .toke carries a complete
+SQLite file, so shipping one needs a build step running sql.js to produce a
+binary that drifts whenever the schema changes. Declaring the design in
+`engine/templates/templates.ts` and importing the roster through the normal
+CSV path is typechecked and exercises the real user path. Revisit if templates
+ever need to carry assets or multiple designs.
+
+### INC-30 · Font weight 500 is not bundled · OPEN · P5.1, P9.4
+`BUNDLED_FONTS` ships 400, 600 and 400-italic. A design asking for 500 now
+falls back to the nearest weight (P9.4) rather than failing, but the design
+system lists 400/500/600 as available. Either bundle the 500 face or stop
+offering it in the inspector.
+
+### INC-31 · Pre-flight does not check font availability · OPEN · P7.3, P9.4
+`getFont` now substitutes the nearest weight instead of returning null, so a
+missing face is silent rather than fatal. Pre-flight should report the
+substitution before export, not after the cards are printed a weight lighter
+than the proof.
+
+### INC-32 · The e2e suite is contention-sensitive · KNOWN · P9.5
+117 tests, two workers, each booting a SQLite WASM worker against one
+Turbopack dev server. Timeouts were raised to 30s per assertion and 90s per
+test to match the real work; a failure under load is still possible and CI
+runs one worker with two retries. Not masked with blanket retries locally,
+since that would hide genuine flakes.
+
+### INC-20 · Token errors do not reach a diagnostics surface · CLOSED by P9.2
+Resolution errors and auto-fit overflow now report to the diagnostics panel
+with the offending objectId, which makes each finding click-to-focus. The
+object still falls back to its template on canvas — a vanished object is
+harder to diagnose than a wrong one — but the reason no longer disappears
+with it.
 
 ---
 
