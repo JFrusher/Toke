@@ -4,18 +4,20 @@ import { fileURLToPath } from 'node:url';
 /**
  * Real font bytes for tests.
  *
- * @fontsource ships WOFF rather than TTF. fontkit reads it and reports the
- * same metrics either way, which is all the measurement tests need. PDF
- * embedding (P8.6) requires TTF/OTF and will need its own fixture.
+ * TTF, deliberately — the SAME files the app serves and the PDF embeds.
+ * An earlier version measured against @fontsource's WOFF, which cannot be
+ * embedded in a PDF at all; measuring one file and embedding another would
+ * void the P5.3 agreement guarantee. Verified identical metrics before
+ * switching (zero delta across all three faces).
  *
  * Node-only — never imported by application code.
  */
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
-export const PLEX_SANS_REGULAR = `${ROOT}node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff`;
-export const PLEX_SANS_BOLD = `${ROOT}node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff`;
-export const PLEX_SANS_ITALIC = `${ROOT}node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-italic.woff`;
+export const PLEX_SANS_REGULAR = `${ROOT}public/fonts/plex-sans-400-normal.ttf`;
+export const PLEX_SANS_BOLD = `${ROOT}public/fonts/plex-sans-600-normal.ttf`;
+export const PLEX_SANS_ITALIC = `${ROOT}public/fonts/plex-sans-400-italic.ttf`;
 
 export function fontBytes(path: string): Uint8Array {
   return new Uint8Array(readFileSync(path));

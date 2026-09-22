@@ -187,9 +187,9 @@ export const PLEX = 'IBM Plex Sans';
 export const BUNDLED_FONTS: readonly { url: string; meta: FontMeta }[] = [
   // family is declared explicitly: the SemiBold file reports its family as
   // "IBM Plex Sans SemiBold", which is not what a design references.
-  { url: '/fonts/plex-sans-400-normal.woff', meta: { family: PLEX, weight: 400, italic: false } },
-  { url: '/fonts/plex-sans-600-normal.woff', meta: { family: PLEX, weight: 600, italic: false } },
-  { url: '/fonts/plex-sans-400-italic.woff', meta: { family: PLEX, weight: 400, italic: true } },
+  { url: '/fonts/plex-sans-400-normal.ttf', meta: { family: PLEX, weight: 400, italic: false } },
+  { url: '/fonts/plex-sans-600-normal.ttf', meta: { family: PLEX, weight: 600, italic: false } },
+  { url: '/fonts/plex-sans-400-italic.ttf', meta: { family: PLEX, weight: 400, italic: true } },
 ];
 
 let bootstrap: Promise<void> | null = null;

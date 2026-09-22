@@ -10,7 +10,7 @@ message is a deferral nobody will find.
 
 Status: `OPEN` · `BLOCKED` (needs another task first) · `DONE`
 
-Last audited: 2026-09-21, after Phase 7.
+Last audited: 2026-09-22, after Phase 8 (partial: P8.1-P8.3).
 
 ---
 
@@ -176,11 +176,11 @@ both autosave, and the last write wins silently.
 user font upload, no font picker, and `loadFont`'s TTF/OTF path is only
 exercised by the WOFF fixture. The loader supports it; nothing calls it.
 
-### INC-16 · Bundled fonts are WOFF, not TTF/OTF · OPEN · P8.6
-@fontsource ships WOFF. fontkit measures it correctly, which is all Phase 5
-needs, but **WOFF cannot be embedded in a PDF** — it is a web container
-format. P8.6 needs TTF or OTF bytes for the same faces, and the measured font
-and the embedded font must be the same file or the P5.3 guarantee is void.
+### INC-16 · Bundled fonts are WOFF, not TTF/OTF · DONE · 2026-09-22
+**Fixed.** Switched to @expo-google-fonts, which ships TTF. Verified the
+metrics are byte-identical to the WOFF first (zero delta across all three
+faces), so the P5.3 agreement still holds — and now the SAME file is measured,
+served to the browser and embedded in the PDF. @fontsource removed.
 
 ### INC-17 · No text shaping · OPEN · accepted for v1
 `measureText` sums advance widths from `font.layout()`. That covers Latin with
