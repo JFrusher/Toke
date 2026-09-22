@@ -11,7 +11,7 @@ import { Fragment } from 'react';
  * that a custom editor has to rebuild badly. The cost is that highlighting is
  * token-level and has no parser: a keyword inside an unterminated string will
  * still colour. Acceptable for a query box; the ceiling is recorded in
- * tasks.todo if the console ever grows into an editor.
+ * scratch/tasks.todo if the console ever grows into an editor.
  */
 
 const KEYWORDS = new Set(

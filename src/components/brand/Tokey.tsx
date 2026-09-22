@@ -18,16 +18,24 @@ import Image from 'next/image';
 
 export type TokeyState = 'greeting' | 'loading' | 'success' | 'error' | 'tip' | 'settings';
 
-const SOURCE: Record<TokeyState, string> = {
-  greeting: '/brand/tokey-greeting.png',
-  loading: '/brand/tokey-loading.png',
-  success: '/brand/tokey-success.png',
-  error: '/brand/tokey-error.png',
-  tip: '/brand/tokey-tip.png',
-  settings: '/brand/tokey-settings.png',
+/**
+ * Source and intrinsic size for each state.
+ *
+ * The real pixel dimensions are declared rather than assumed square: Next
+ * needs the true ratio to reserve the right box, and these artworks are not
+ * square. Getting it wrong reserves the wrong space and shifts the layout when
+ * the image lands.
+ */
+const ART: Record<TokeyState, { src: string; width: number; height: number }> = {
+  greeting: { src: '/brand/tokey-greeting.png', width: 451, height: 311 },
+  loading: { src: '/brand/tokey-loading.png', width: 345, height: 314 },
+  success: { src: '/brand/tokey-success.png', width: 425, height: 320 },
+  error: { src: '/brand/tokey-error.png', width: 316, height: 316 },
+  tip: { src: '/brand/tokey-tip.png', width: 377, height: 317 },
+  settings: { src: '/brand/tokey-settings.png', width: 317, height: 317 },
 };
 
-/** Rendered sizes, on the 4px grid. */
+/** Rendered widths, on the 4px grid. */
 const SIZE = { sm: 48, md: 72, lg: 112 } as const;
 
 export function Tokey({
@@ -39,21 +47,22 @@ export function Tokey({
   size?: keyof typeof SIZE;
   className?: string;
 }) {
-  const pixels = SIZE[size];
+  const art = ART[state];
+  const width = SIZE[size];
+  const height = Math.round((width / art.width) * art.height);
 
   return (
     <Image
-      src={SOURCE[state]}
+      src={art.src}
       alt=""
       aria-hidden="true"
-      width={pixels}
-      height={pixels}
-      // Intrinsic sizes are ~320px square, so the largest use is still served
-      // at better than 2x without a second asset.
-      sizes={`${pixels}px`}
+      width={width}
+      height={height}
+      // Sources are ~320-450px wide, so even the largest use is served at
+      // better than 2x without a second asset.
+      sizes={`${width}px`}
       data-testid={`tokey-${state}`}
       className={className}
-      style={{ width: pixels, height: 'auto' }}
       priority={state === 'greeting'}
     />
   );
