@@ -123,6 +123,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
   function mapSelection(
     transform: (selected: readonly SceneNode[]) => readonly SceneNode[],
     label: string,
+    coalesceKey?: string,
   ) {
     const selected = selectedNodes();
     if (selected.length === 0) return;
@@ -132,6 +133,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
       replace(
         get().nodes.map((node) => updated.get(node.id) ?? node),
         label,
+        coalesceKey,
       ),
     );
   }
@@ -196,6 +198,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         (selected) =>
           selected.map((node) => ({ ...node, x: points(node.x + dx), y: points(node.y + dy) })),
         'Move object',
+        // Held arrow keys are one gesture, not one command per keypress.
+        // Keyed on the selection so nudging a different object starts a new
+        // entry rather than merging into the previous object's move.
+        `nudge:${get().selection.join(',')}`,
       );
     },
 

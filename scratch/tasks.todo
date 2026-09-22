@@ -157,7 +157,7 @@ query and "Use as record source" hands it to `setRecordSource`.
 ### INC-9 · Align and distribute have no keyboard shortcuts · OPEN · P3.8
 Toolbar buttons only. CLAUDE.md §4.7 commits to full keyboard operation.
 
-### INC-10 · Nudge is not coalesced in history · OPEN · P3.9
+### INC-10 · Nudge is not coalesced in history · CLOSED
 > "A drag is one entry, not one per mousemove."
 
 Fabric emits `object:modified` once per drag, so **drags are fine**. Held
@@ -165,8 +165,10 @@ arrow keys are not: each keypress pushes its own history entry, so nudging an
 object ten steps costs ten undos. `coalesceKey` is implemented and tested in
 the history module but no call site passes one.
 
-- **Fix:** pass a `coalesceKey` such as `nudge:<selection-ids>` from
-  `useCanvasStore.nudge`.
+**Fixed.** `nudge` passes `nudge:<selection-ids>`, so a run of arrow presses is
+one history entry and changing the selection starts a new one. Covered in
+`engine/store/nudge.test.ts`, including that a nudge does not merge into the
+placement before it.
 
 ### INC-11 · Assets and fonts are not collected into a save · PARTLY CLOSED
 Assets now travel inside the `.toke` and into the export job; a saved project
