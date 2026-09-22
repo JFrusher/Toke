@@ -65,6 +65,8 @@ type CanvasState = Document & {
   setPan: (x: number, y: number) => void;
   zoomToFit: (viewport: { width: number; height: number }) => void;
   addGuide: (guide: Guide) => void;
+  removeGuide: (id: string) => void;
+  clearGuides: () => void;
   setSnapEnabled: (enabled: boolean) => void;
 
   align: (edge: AlignEdge) => void;
@@ -226,6 +228,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     },
 
     addGuide: (guide) => set({ guides: [...get().guides, guide] }),
+    // Guides are not history: they are scaffolding the user puts up and takes
+    // down, and filling the undo stack with them would bury the edits that
+    // matter.
+    removeGuide: (id) => set({ guides: get().guides.filter((guide) => guide.id !== id) }),
+    clearGuides: () => set({ guides: [] }),
     setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
 
     align(edge) {

@@ -120,14 +120,24 @@ both now derive their clicks from the live zoom.
 
 Unblocks INC-2: drag-from-ruler is the missing half of guide creation.
 
-### INC-2 · Guides cannot be created · OPEN · P3.7
-The snapping engine is complete and tested, `guides` lives in the store and
-`addGuide` exists — but nothing calls it. There is no drag-from-ruler
-interaction (blocked by INC-1) and no guide rendering.
+### INC-2 · Guides cannot be created · CLOSED
+All three parts built now INC-1 unblocked the first.
 
-Also missing from the same criterion:
-- **Snap indicators** — `snap()` returns `matches`; nothing draws them.
-- **Ctrl suspends snapping** — only the toolbar checkbox toggles it.
+- **Drag from a ruler** creates a guide on the matching axis.
+- **Snap indicators** are drawn from the `matches` that `snap()` has always
+  returned and nothing ever showed — the canvas snapped silently.
+- **Ctrl suspends snapping** for the duration of a drag, which is how you
+  place something a hair off a guide deliberately.
+
+Guides are an SVG overlay, not Fabric objects: they must never reach the scene
+graph and therefore the PDF, must not be snap targets for themselves, and
+keeping them out preserves the one-to-one Fabric↔scene mapping the sync
+depends on. They are not pushed onto the history stack either — scaffolding
+the user puts up and takes down would bury the edits that matter.
+
+The lines are SVG but the hit targets are real buttons: a 1px line is not
+something anyone can click, and an SVG element with a click handler is
+pointer-only, where §4.7 wants keyboard removal too.
 
 ### INC-3 · Pan by space-drag and middle-drag · CLOSED
 > "space-drag and middle-drag pan"

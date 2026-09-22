@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { rulerTicks } from '@/engine/canvas/ruler';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useShellStore } from '@/engine/store/useShellStore';
+import { points } from '@/engine/units/types';
 
 /**
  * Rulers down the top and left edges of the viewport.
@@ -24,11 +25,60 @@ type Props = {
   readonly cursor: { readonly x: number; readonly y: number } | null;
 };
 
+/**
+ * Starts a drag from a ruler that drops a guide on the canvas.
+ *
+ * Dragging off a ruler is how every layout tool creates a guide, and it is the
+ * half of INC-2 that was missing: the snapping engine, the store field and
+ * `addGuide` were all built and nothing ever called them.
+ */
+function useGuideDrag(axis: 'vertical' | 'horizontal') {
+  const addGuide = useCanvasStore((s) => s.addGuide);
+  const zoom = useCanvasStore((s) => s.zoom);
+  const panX = useCanvasStore((s) => s.panX);
+  const panY = useCanvasStore((s) => s.panY);
+
+  return (event: React.PointerEvent<SVGSVGElement>) => {
+    const surface = event.currentTarget.parentElement;
+    if (surface === null) return;
+    event.preventDefault();
+
+    function drop(move: PointerEvent) {
+      const box = surface?.getBoundingClientRect();
+      if (box === undefined) return;
+
+      // Screen position relative to the drawing area, which starts after the
+      // rulers, then back through the viewport transform into scene points.
+      const screen =
+        axis === 'vertical'
+          ? move.clientX - box.left - RULER_SIZE
+          : move.clientY - box.top - RULER_SIZE;
+      const pan = axis === 'vertical' ? panX : panY;
+
+      addGuide({
+        id: `guide-${axis}-${Date.now().toString(36)}`,
+        axis,
+        position: points((screen - pan) / zoom),
+      });
+    }
+
+    function onUp(move: PointerEvent) {
+      window.removeEventListener('pointerup', onUp);
+      drop(move);
+    }
+
+    window.addEventListener('pointerup', onUp);
+  };
+}
+
 export function CanvasRulers({ width, height, cursor }: Props) {
   const zoom = useCanvasStore((s) => s.zoom);
   const panX = useCanvasStore((s) => s.panX);
   const panY = useCanvasStore((s) => s.panY);
   const unit = useShellStore((s) => s.displayUnit);
+
+  const dragVertical = useGuideDrag('vertical');
+  const dragHorizontal = useGuideDrag('horizontal');
 
   if (width <= 0 || height <= 0) return null;
 
@@ -64,7 +114,8 @@ export function CanvasRulers({ width, height, cursor }: Props) {
         width={width}
         height={RULER_SIZE}
         style={{ left: RULER_SIZE }}
-        className="pointer-events-none absolute top-0 z-20 border-hairline-strong border-b bg-panel"
+        onPointerDown={dragVertical}
+        className="absolute top-0 z-20 cursor-ew-resize border-hairline-strong border-b bg-panel"
       >
         <title>{`Horizontal ruler in ${unit}`}</title>
         {horizontal.map((tick) => {
@@ -108,7 +159,8 @@ export function CanvasRulers({ width, height, cursor }: Props) {
         width={RULER_SIZE}
         height={height}
         style={{ top: RULER_SIZE }}
-        className="pointer-events-none absolute left-0 z-20 border-hairline-strong border-r bg-panel"
+        onPointerDown={dragHorizontal}
+        className="absolute left-0 z-20 cursor-ns-resize border-hairline-strong border-r bg-panel"
       >
         <title>{`Vertical ruler in ${unit}`}</title>
         {vertical.map((tick) => {

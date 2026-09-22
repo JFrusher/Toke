@@ -2,8 +2,9 @@
 
 import * as fabric from 'fabric';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CanvasGuides } from '@/components/canvas/CanvasGuides';
 import { CanvasRulers, RULER_SIZE, useCursorPosition } from '@/components/canvas/CanvasRulers';
-import { snap, snapTargets } from '@/engine/canvas/snapping';
+import { type SnapMatch, snap, snapTargets } from '@/engine/canvas/snapping';
 import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
@@ -302,6 +303,9 @@ export function StudioCanvas() {
   /** Held space turns a left-drag into a pan, as it does in every design tool. */
   const spaceHeld = useRef(false);
   const [spacePanning, setSpacePanning] = useState(false);
+  /** Held Ctrl suspends snapping. A ref, because it is read inside a Fabric handler. */
+  const suspendSnap = useRef(false);
+  const [snapMatches, setSnapMatches] = useState<readonly SnapMatch[]>([]);
   const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
@@ -547,6 +551,9 @@ export function StudioCanvas() {
     }
 
     function onModified() {
+      // Indicators belong to the gesture; leaving them up afterwards would
+      // draw lines through artwork that is no longer moving.
+      setSnapMatches([]);
       commitFromFabric('Transform object');
     }
 
@@ -574,10 +581,15 @@ export function StudioCanvas() {
       const result = snap(live, targets, {
         threshold: SNAP_THRESHOLD_PX,
         zoom: store.zoom,
-        enabled: store.snapEnabled,
+        // Ctrl suspends snapping for the duration of a drag, which is how
+        // every layout tool lets you place something a hair off a guide.
+        enabled: store.snapEnabled && !suspendSnap.current,
       });
 
       target.set({ left: result.rect.x, top: result.rect.y });
+      // Drawn by the overlay: `matches` has always been returned and nothing
+      // ever showed it, so the canvas snapped silently.
+      setSnapMatches(result.matches);
     }
 
     function onWheel(event: { e: WheelEvent }) {
@@ -665,6 +677,7 @@ export function StudioCanvas() {
     function onDown(event: KeyboardEvent) {
       // Not while typing: space belongs to the text, and Fabric's editor is a
       // real textarea.
+      if (event.key === 'Control' || event.key === 'Meta') suspendSnap.current = true;
       if (event.code !== 'Space' || isTypingTarget(event.target)) return;
       // Stops the page scrolling under the canvas on every space.
       event.preventDefault();
@@ -673,6 +686,7 @@ export function StudioCanvas() {
     }
 
     function onUp(event: KeyboardEvent) {
+      if (event.key === 'Control' || event.key === 'Meta') suspendSnap.current = false;
       if (event.code !== 'Space') return;
       spaceHeld.current = false;
       setSpacePanning(false);
@@ -682,6 +696,7 @@ export function StudioCanvas() {
     // leave the canvas stuck in pan mode with no key to let go of.
     function onBlur() {
       spaceHeld.current = false;
+      suspendSnap.current = false;
       setSpacePanning(false);
     }
 
@@ -751,6 +766,7 @@ export function StudioCanvas() {
         style={{ left: RULER_SIZE, top: RULER_SIZE }}
       >
         <canvas ref={canvasElementRef} />
+        <CanvasGuides width={size.width} height={size.height} matches={snapMatches} />
       </div>
     </div>
   );
