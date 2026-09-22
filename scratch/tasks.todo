@@ -99,12 +99,26 @@ Errors currently surface as one-off `role="alert"` paragraphs. Every
 These were signed off as phase-complete with parts missing. Each names the
 criterion it fails.
 
-### INC-1 · Rulers · OPEN · P3.3
+### INC-1 · Rulers · CLOSED
 > "Rulers in the active display unit with a live cursor indicator. Ruler ticks
 > stay legible from 10% to 1600% (adaptive subdivision)."
 
-`CanvasRulers.tsx` was never written. Zoom, pan and fit all work; the rulers do
-not exist.
+Built. Tick placement lives in `engine/canvas/ruler.ts` and is pure, so the
+legibility claim is proved by arithmetic across all three units and ten zoom
+levels rather than eyeballed: a labelled tick always has 56px, a subdivision
+always has 6px, and the step ladder is monotonic so zooming in never jumps to
+a coarser step.
+
+Steps are chosen in the DISPLAY unit, not in points — a millimetre ruler must
+land on whole millimetres, and inches subdivide in halves down to sixteenths
+rather than the decimal 1-2-5 run.
+
+The drawing area is inset by the rulers rather than overlaid by them, so
+nothing can hide underneath where it cannot be clicked. This shifted the fit
+zoom, which in turn broke two e2e specs that assumed fixed pixel offsets —
+both now derive their clicks from the live zoom.
+
+Unblocks INC-2: drag-from-ruler is the missing half of guide creation.
 
 ### INC-2 · Guides cannot be created · OPEN · P3.7
 The snapping engine is complete and tested, `guides` lives in the store and

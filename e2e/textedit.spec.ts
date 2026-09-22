@@ -12,15 +12,31 @@ import { expect, type Page, test } from '@playwright/test';
  */
 
 /**
+ * The default text box, in points, as `measureText` sizes the word "Text".
+ *
+ * A text object is placed with its top-left at the click, so clicking that
+ * same point again lands on the top-left resize handle: the object never sees
+ * a mousedown and never enters editing. The click has to go into the body.
+ */
+const DEFAULT_BOX_PT = { width: 34, height: 21 };
+
+/** Current zoom, read from the toolbar rather than assumed. */
+async function zoomOf(page: Page): Promise<number> {
+  const label = (await page.getByTestId('zoom-level').textContent()) ?? '100%';
+  return Number.parseInt(label.replace('%', ''), 10) / 100;
+}
+
+/**
  * Screen offset from the placement point into the object's body.
  *
- * A text object is placed with its top-left at the click, so clicking the same
- * point again lands on the top-left resize handle rather than the text — the
- * object never sees a mousedown and never enters editing. The default box is
- * roughly 34 x 22pt and the artboard sits near 3x zoom, so this offset is
- * comfortably inside it.
+ * Derived from the zoom, not fixed: the fit zoom changes whenever the viewport
+ * geometry does — adding rulers moved it — and a hardcoded pixel offset then
+ * lands outside the object and silently stops testing anything.
  */
-const INTO_BODY = { x: 40, y: 26 };
+async function intoBody(page: Page) {
+  const zoom = await zoomOf(page);
+  return { x: (DEFAULT_BOX_PT.width / 2) * zoom, y: (DEFAULT_BOX_PT.height / 2) * zoom };
+}
 
 async function ready(page: Page) {
   await page.goto('/');
@@ -44,7 +60,8 @@ async function placeText(page: Page) {
 
 /** Types into Fabric's editor and clicks the pasteboard to commit. */
 async function editInPlace(page: Page, at: { x: number; y: number }, text: string) {
-  await page.mouse.click(at.x + INTO_BODY.x, at.y + INTO_BODY.y);
+  const offset = await intoBody(page);
+  await page.mouse.click(at.x + offset.x, at.y + offset.y);
   // Fabric mounts its own textarea on entering edit mode; waiting for it is
   // what keeps the keystrokes below out of the global shortcut handler.
   await page.waitForSelector('textarea[data-fabric="textarea"]', { timeout: 10_000 });
@@ -54,7 +71,9 @@ async function editInPlace(page: Page, at: { x: number; y: number }, text: strin
 
   const box = await page.getByTestId('canvas-viewport').boundingBox();
   if (box === null) throw new Error('viewport has no box');
-  await page.mouse.click(box.x + 12, box.y + 12);
+  // Clear of the rulers, which occupy the first 20px of each edge and swallow
+  // the click before Fabric can see the mouseup that exits editing.
+  await page.mouse.click(box.x + 60, box.y + 60);
   await expect(page.locator('textarea[data-fabric="textarea"]')).toHaveCount(0);
 }
 
@@ -62,7 +81,8 @@ test('clicking a selected text object enters the editor', async ({ page }) => {
   await ready(page);
   const at = await placeText(page);
 
-  await page.mouse.click(at.x + INTO_BODY.x, at.y + INTO_BODY.y);
+  const offset = await intoBody(page);
+  await page.mouse.click(at.x + offset.x, at.y + offset.y);
   await expect(page.locator('textarea[data-fabric="textarea"]')).toHaveCount(1);
 });
 

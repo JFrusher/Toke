@@ -2,6 +2,7 @@
 
 import * as fabric from 'fabric';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CanvasRulers, RULER_SIZE, useCursorPosition } from '@/components/canvas/CanvasRulers';
 import { snap, snapTargets } from '@/engine/canvas/snapping';
 import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
@@ -294,6 +295,9 @@ export function StudioCanvas() {
    *  does not immediately overwrite what the user is dragging. */
   const fromFabric = useRef(false);
   const [renderedCount, setRenderedCount] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // `pointer`, not `cursor`: the record cursor already owns that name here.
+  const pointer = useCursorPosition(containerRef);
   const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
@@ -377,6 +381,9 @@ export function StudioCanvas() {
     const host = container;
     function resize() {
       canvas.setDimensions({ width: host.clientWidth, height: host.clientHeight });
+      // Mirrored into state so the rulers span exactly the drawing area; they
+      // sit outside it and cannot read the Fabric canvas themselves.
+      setSize({ width: host.clientWidth, height: host.clientHeight });
       canvas.requestRenderAll();
     }
     resize();
@@ -627,13 +634,23 @@ export function StudioCanvas() {
 
   return (
     <div
-      ref={containerRef}
       data-testid="canvas-viewport"
       data-fabric-objects={renderedCount}
       data-fonts-ready={fontsReady}
       className="relative h-full w-full overflow-hidden bg-pasteboard"
     >
-      <canvas ref={canvasElementRef} />
+      <CanvasRulers width={size.width} height={size.height} cursor={pointer} />
+
+      {/* Inset by the rulers rather than overlaid by them: an object hidden
+          under a ruler cannot be clicked, and the artboard must fit the space
+          that is actually drawable. */}
+      <div
+        ref={containerRef}
+        className="absolute right-0 bottom-0"
+        style={{ left: RULER_SIZE, top: RULER_SIZE }}
+      >
+        <canvas ref={canvasElementRef} />
+      </div>
     </div>
   );
 }
