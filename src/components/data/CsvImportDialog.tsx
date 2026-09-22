@@ -137,7 +137,7 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
                         <span
                           className={
                             column.action === 'ignore'
-                              ? 'block text-ink-disabled'
+                              ? 'block text-ink-subtle'
                               : 'block text-ink-muted'
                           }
                         >

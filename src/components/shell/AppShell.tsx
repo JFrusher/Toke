@@ -14,7 +14,9 @@ import { TransformFields } from '@/components/inspector/TransformFields';
 import { PreflightReport } from '@/components/preview/PreflightReport';
 import { DiagnosticsPanel } from '@/components/shell/DiagnosticsPanel';
 import { FileMenu } from '@/components/shell/FileMenu';
+import { LiveAnnouncer } from '@/components/shell/LiveAnnouncer';
 import { ResizeHandle } from '@/components/shell/ResizeHandle';
+import { ShortcutReference } from '@/components/shell/ShortcutReference';
 import { TemplateGallery } from '@/components/shell/TemplateGallery';
 import { Button } from '@/components/ui/Button';
 import { installDiagnosticsBridge } from '@/engine/store/diagnosticsBridge';
@@ -71,6 +73,7 @@ export function AppShell() {
   const [preflighting, setPreflighting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [templates, setTemplates] = useState(false);
+  const [shortcuts, setShortcuts] = useState(false);
 
   const isEmpty = useCanvasStore((s) => s.nodes.length === 0);
 
@@ -130,6 +133,14 @@ export function AppShell() {
           </Button>
           <Button onClick={() => setExporting(true)} data-testid="open-export">
             Export PDF
+          </Button>
+          <Button
+            onClick={() => setShortcuts(true)}
+            aria-label="Keyboard shortcuts"
+            data-testid="open-shortcuts"
+            variant="quiet"
+          >
+            ?
           </Button>
         </div>
       </header>
@@ -283,6 +294,8 @@ export function AppShell() {
       <PreflightReport open={preflighting} onClose={() => setPreflighting(false)} />
       <ExportDialog open={exporting} onClose={() => setExporting(false)} />
       <TemplateGallery open={templates} onClose={() => setTemplates(false)} />
+      <ShortcutReference open={shortcuts} onClose={() => setShortcuts(false)} />
+      <LiveAnnouncer />
     </main>
   );
 }

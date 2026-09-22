@@ -26,9 +26,7 @@ export function TokenBindingPanel() {
   if (node === undefined || node.kind !== 'text') {
     return (
       <section className="border-hairline border-b p-3">
-        <h2 className="font-semibold text-[11px] text-ink-muted uppercase tracking-[0.06em]">
-          Binding
-        </h2>
+        <h2 className="font-medium text-[11px] text-ink-muted">Binding</h2>
         <p className="mt-1.5 text-[12px] text-ink-subtle">Select one text object.</p>
       </section>
     );
@@ -60,13 +58,11 @@ export function TokenBindingPanel() {
   return (
     <section className="flex flex-col gap-2.5 border-hairline border-b p-3">
       <div className="flex items-center gap-2">
-        <h2 className="font-semibold text-[11px] text-ink-muted uppercase tracking-[0.06em]">
-          Binding
-        </h2>
+        <h2 className="font-medium text-[11px] text-ink-muted">Binding</h2>
         {bound && (
           <span
             data-testid="bound-badge"
-            className="rounded-[2px] bg-accent-weak px-1 py-px text-[10px] text-bound"
+            className="rounded-[2px] bg-accent-weak px-1 py-px text-[11px] text-bound"
           >
             bound
           </span>
@@ -102,14 +98,14 @@ export function TokenBindingPanel() {
                 type="button"
                 data-testid={`insert-${column.name}`}
                 onClick={() => insertToken(column.name)}
-                className="rounded-[2px] border border-border-control bg-panel-raised px-1.5 py-0.5 font-mono text-[10px] text-ink hover:bg-accent-weak focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+                className="rounded-[2px] border border-border-control bg-panel-raised px-1.5 py-0.5 font-mono text-[11px] text-ink hover:bg-accent-weak focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
               >
                 {column.name}
               </button>
             ))}
           </div>
         )}
-        <p className="text-[10px] text-ink-subtle">
+        <p className="text-[11px] text-ink-subtle">
           Formatters: {FORMATTER_NAMES.join(', ')} — {'{{ last_name | upper }}'}
         </p>
       </div>

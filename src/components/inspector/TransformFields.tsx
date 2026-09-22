@@ -68,7 +68,7 @@ function NumberField({
             'disabled:bg-panel disabled:text-ink-disabled',
           )}
         />
-        <span className="pointer-events-none absolute top-1 right-1.5 text-[10px] text-ink-subtle">
+        <span className="pointer-events-none absolute top-1 right-1.5 text-[11px] text-ink-subtle">
           {suffix}
         </span>
       </span>
@@ -106,9 +106,7 @@ export function TransformFields() {
 
   return (
     <section className="flex flex-col gap-2 border-hairline border-b p-3">
-      <h2 className="font-semibold text-[11px] text-ink-muted uppercase tracking-[0.06em]">
-        Transform
-      </h2>
+      <h2 className="font-medium text-[11px] text-ink-muted">Transform</h2>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         <NumberField
@@ -164,7 +162,7 @@ export function TransformFields() {
             }}
             className="h-6 w-full rounded-[2px] border border-border-control bg-panel-raised px-1.5 pr-6 text-[12px] text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 disabled:bg-panel disabled:text-ink-disabled"
           />
-          <span className="pointer-events-none absolute top-1 right-1.5 text-[10px] text-ink-subtle">
+          <span className="pointer-events-none absolute top-1 right-1.5 text-[11px] text-ink-subtle">
             °
           </span>
         </span>

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AppShell } from '@/components/shell/AppShell';
+import { SmallViewport, useIsSmallViewport } from '@/components/shell/SmallViewport';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { points } from '@/engine/units/types';
@@ -31,6 +32,7 @@ function isTextEntry(target: EventTarget | null): boolean {
  */
 export default function StudioPage() {
   const openDatabase = useDataStore((s) => s.open);
+  const small = useIsSmallViewport();
 
   useEffect(() => {
     void openDatabase();
@@ -96,5 +98,7 @@ export default function StudioPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  return <AppShell />;
+  // Both trees mount the same stores, so the proof shows the current design
+  // and data if the window is simply resized.
+  return small ? <SmallViewport /> : <AppShell />;
 }

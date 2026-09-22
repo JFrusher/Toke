@@ -243,7 +243,7 @@ export function DataGrid() {
                           onDoubleClick={() => setDraft(display(value))}
                           className={cn(
                             'h-full w-full truncate px-2 text-left text-[12px] outline-none',
-                            value === null ? 'text-ink-disabled' : 'text-ink',
+                            value === null ? 'text-ink-subtle' : 'text-ink',
                           )}
                           data-numeric={column.declaredType === 'INTEGER' ? '' : undefined}
                         >
@@ -263,7 +263,7 @@ export function DataGrid() {
         <span data-numeric>
           {sorted.length} {sorted.length === 1 ? 'record' : 'records'}
         </span>
-        <span className="text-ink-disabled">
+        <span className="text-ink-subtle">
           Arrows move · Enter edits · Esc cancels · Shift+Delete removes row
         </span>
       </footer>

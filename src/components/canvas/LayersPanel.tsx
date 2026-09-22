@@ -51,12 +51,12 @@ function LayerRow({
             isSelected ? 'bg-accent-weak text-accent' : 'text-ink hover:bg-accent-weak',
           )}
         >
-          <span aria-hidden className="w-3 shrink-0 text-[10px] text-ink-subtle">
+          <span aria-hidden className="w-3 shrink-0 text-[11px] text-ink-subtle">
             {isGroup(node) ? '▾' : ''}
           </span>
           <span className="truncate">{node.name}</span>
-          {!node.visible && <span className="ml-auto text-[10px] text-ink-disabled">hidden</span>}
-          {bound && <span className="ml-auto text-[10px] text-bound">bound</span>}
+          {!node.visible && <span className="ml-auto text-[11px] text-ink-subtle">hidden</span>}
+          {bound && <span className="ml-auto text-[11px] text-bound">bound</span>}
         </button>
       </li>
       {isGroup(node) &&
@@ -100,7 +100,7 @@ export function LayersPanel() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <h2 className="shrink-0 border-hairline border-b px-3 py-2 font-semibold text-[11px] text-ink-muted uppercase tracking-[0.06em]">
+      <h2 className="shrink-0 border-hairline border-b px-3 py-2 font-medium text-[11px] text-ink-muted">
         Layers
       </h2>
 
