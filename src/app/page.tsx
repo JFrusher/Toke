@@ -3,12 +3,30 @@
 import { useEffect } from 'react';
 import { AppShell } from '@/components/shell/AppShell';
 import { SmallViewport, useIsSmallViewport } from '@/components/shell/SmallViewport';
+import type { AlignEdge } from '@/engine/canvas/arrange';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { points } from '@/engine/units/types';
+import { isTypingTarget } from '@/lib/dom';
 
 const NUDGE = 1;
 const NUDGE_LARGE = 10;
+
+/**
+ * Align and distribute, on Ctrl+Shift.
+ *
+ * CLAUDE.md §4.7 commits to full keyboard operation, and these were toolbar
+ * buttons only. Ctrl+Shift keeps them clear of the browser's own Ctrl+letter
+ * bindings and of the single-key tool shortcuts.
+ */
+const ALIGN_KEYS: Record<string, AlignEdge> = {
+  l: 'left',
+  c: 'centre',
+  r: 'right',
+  t: 'top',
+  m: 'middle',
+  b: 'bottom',
+};
 
 const TOOL_KEYS: Record<string, 'select' | 'text' | 'rect' | 'ellipse' | 'line'> = {
   v: 'select',
@@ -17,12 +35,6 @@ const TOOL_KEYS: Record<string, 'select' | 'text' | 'rect' | 'ellipse' | 'line'>
   e: 'ellipse',
   l: 'line',
 };
-
-/** True when the event came from somewhere the user is typing. */
-function isTextEntry(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-}
 
 /**
  * The client boundary, and nothing else.
@@ -44,7 +56,7 @@ export default function StudioPage() {
 
       // Never steal keys from a text field — typing "r" in a name should not
       // switch to the rectangle tool.
-      if (isTextEntry(event.target)) return;
+      if (isTypingTarget(event.target)) return;
 
       // Nor from a resize handle, which owns its own arrow keys.
       if (
@@ -55,6 +67,40 @@ export default function StudioPage() {
       }
 
       const modifier = event.ctrlKey || event.metaKey;
+
+      if (modifier && event.shiftKey) {
+        const edge = ALIGN_KEYS[event.key.toLowerCase()];
+        if (edge !== undefined) {
+          event.preventDefault();
+          store.align(edge);
+          return;
+        }
+        if (event.key.toLowerCase() === 'h') {
+          event.preventDefault();
+          store.distribute('horizontal');
+          return;
+        }
+        if (event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          store.distribute('vertical');
+          return;
+        }
+      }
+
+      // Bracket keys reorder within the stack, as they do in every layout tool.
+      if (modifier && (event.key === '[' || event.key === ']')) {
+        event.preventDefault();
+        store.reorderSelection(
+          event.key === ']'
+            ? event.shiftKey
+              ? 'front'
+              : 'forward'
+            : event.shiftKey
+              ? 'back'
+              : 'backward',
+        );
+        return;
+      }
 
       if (modifier && event.key.toLowerCase() === 'z') {
         event.preventDefault();

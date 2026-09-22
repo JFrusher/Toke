@@ -29,6 +29,19 @@ const GROUPS: readonly { title: string; items: readonly [string, string][] }[] =
       ['Escape', 'Deselect'],
       ['Ctrl + Z', 'Undo'],
       ['Ctrl + Shift + Z', 'Redo'],
+      ['Ctrl + ]', 'Bring forward'],
+      ['Ctrl + [', 'Send backward'],
+      ['Ctrl + Shift + ]', 'Bring to front'],
+      ['Ctrl + Shift + [', 'Send to back'],
+    ],
+  },
+  {
+    title: 'Align and distribute',
+    items: [
+      ['Ctrl + Shift + L / C / R', 'Align left, centre, right'],
+      ['Ctrl + Shift + T / M / B', 'Align top, middle, bottom'],
+      ['Ctrl + Shift + H', 'Distribute horizontally'],
+      ['Ctrl + Shift + V', 'Distribute vertically'],
     ],
   },
   {

@@ -17,6 +17,7 @@ import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
 import { measureText } from '@/engine/text/measure';
 import { renderTextNode, type StudioMode } from '@/engine/tokens/render';
 import { points } from '@/engine/units/types';
+import { isTypingTarget } from '@/lib/dom';
 import { isOk } from '@/lib/result';
 
 /**
@@ -298,6 +299,9 @@ export function StudioCanvas() {
   const [size, setSize] = useState({ width: 0, height: 0 });
   // `pointer`, not `cursor`: the record cursor already owns that name here.
   const pointer = useCursorPosition(containerRef);
+  /** Held space turns a left-drag into a pan, as it does in every design tool. */
+  const spaceHeld = useRef(false);
+  const [spacePanning, setSpacePanning] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
@@ -589,6 +593,53 @@ export function StudioCanvas() {
       store.setPan(store.panX - event.e.deltaX, store.panY - event.e.deltaY);
     }
 
+    /**
+     * Space-drag and middle-drag pan.
+     *
+     * Both are the conventional gestures and neither existed — only the wheel
+     * did, which is unusable on a mouse without horizontal scroll. Held space
+     * suspends selection so the drag pans instead of marquee-selecting.
+     */
+    let panning: { x: number; y: number } | null = null;
+    // Captured after the null guard above: TypeScript loses the narrowing
+    // across a function declaration boundary.
+    const surface = canvas;
+
+    function beginPan(event: { e: MouseEvent | TouchEvent }) {
+      const native = event.e;
+      if (!(native instanceof MouseEvent)) return false;
+
+      // Middle button, or left button while space is held.
+      const wants = native.button === 1 || (spaceHeld.current && native.button === 0);
+      if (!wants) return false;
+
+      native.preventDefault();
+      panning = { x: native.clientX, y: native.clientY };
+      surface.setCursor('grabbing');
+      return true;
+    }
+
+    function onPanMove(event: { e: MouseEvent | TouchEvent }) {
+      if (panning === null) return;
+      const native = event.e;
+      if (!(native instanceof MouseEvent)) return;
+
+      const store = useCanvasStore.getState();
+      store.setPan(
+        store.panX + (native.clientX - panning.x),
+        store.panY + (native.clientY - panning.y),
+      );
+      panning = { x: native.clientX, y: native.clientY };
+    }
+
+    function endPan() {
+      panning = null;
+    }
+
+    canvas.on('mouse:down:before', beginPan);
+    canvas.on('mouse:move', onPanMove);
+    canvas.on('mouse:up', endPan);
+
     canvas.on('selection:created', onSelection);
     canvas.on('selection:updated', onSelection);
     canvas.on('selection:cleared', onSelection);
@@ -597,6 +648,9 @@ export function StudioCanvas() {
     canvas.on('mouse:wheel', onWheel);
 
     return () => {
+      canvas.off('mouse:down:before', beginPan);
+      canvas.off('mouse:move', onPanMove);
+      canvas.off('mouse:up', endPan);
       canvas.off('selection:created', onSelection);
       canvas.off('selection:updated', onSelection);
       canvas.off('selection:cleared', onSelection);
@@ -605,6 +659,53 @@ export function StudioCanvas() {
       canvas.off('mouse:wheel', onWheel);
     };
   }, [commitFromFabric]);
+
+  // ---- space-to-pan ------------------------------------------------------
+  useEffect(() => {
+    function onDown(event: KeyboardEvent) {
+      // Not while typing: space belongs to the text, and Fabric's editor is a
+      // real textarea.
+      if (event.code !== 'Space' || isTypingTarget(event.target)) return;
+      // Stops the page scrolling under the canvas on every space.
+      event.preventDefault();
+      spaceHeld.current = true;
+      setSpacePanning(true);
+    }
+
+    function onUp(event: KeyboardEvent) {
+      if (event.code !== 'Space') return;
+      spaceHeld.current = false;
+      setSpacePanning(false);
+    }
+
+    // Released on blur as well: alt-tabbing away mid-drag would otherwise
+    // leave the canvas stuck in pan mode with no key to let go of.
+    function onBlur() {
+      spaceHeld.current = false;
+      setSpacePanning(false);
+    }
+
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
+  // While space is held the canvas must not marquee-select under the drag.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
+    canvas.selection = !spacePanning && useCanvasStore.getState().tool === 'select';
+    // skipTargetFind as well as selection: without it a space-drag that starts
+    // over an object selects that object instead of panning, so the gesture
+    // only works on empty pasteboard — which is where it is least needed.
+    canvas.skipTargetFind = spacePanning;
+    canvas.defaultCursor = spacePanning ? 'grab' : 'default';
+  }, [spacePanning]);
 
   // ---- placement tools ---------------------------------------------------
   useEffect(() => {

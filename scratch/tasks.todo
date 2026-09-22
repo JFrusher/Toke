@@ -129,10 +129,14 @@ Also missing from the same criterion:
 - **Snap indicators** — `snap()` returns `matches`; nothing draws them.
 - **Ctrl suspends snapping** — only the toolbar checkbox toggles it.
 
-### INC-3 · Pan by space-drag and middle-drag · OPEN · P3.3
+### INC-3 · Pan by space-drag and middle-drag · CLOSED
 > "space-drag and middle-drag pan"
 
-Only wheel/trackpad pan is implemented.
+Both built. Space-drag sets `skipTargetFind` as well as clearing `selection`,
+so a drag that starts over an object pans rather than selecting it — without
+that the gesture only worked on empty pasteboard, which is where it is least
+needed. Space is ignored while typing, and the held state is released on
+window blur so alt-tabbing mid-drag cannot leave the canvas stuck in pan mode.
 
 ### INC-4 · Layers panel is read-only · OPEN · P3.10
 > "Reorder by drag, rename, toggle visibility/lock, select."
@@ -168,8 +172,10 @@ edit the file. Missing:
 nowhere. The SQL console now drives them: `SqlConsole.tsx` runs any read-only
 query and "Use as record source" hands it to `setRecordSource`.
 
-### INC-9 · Align and distribute have no keyboard shortcuts · OPEN · P3.8
-Toolbar buttons only. CLAUDE.md §4.7 commits to full keyboard operation.
+### INC-9 · Align and distribute have no keyboard shortcuts · CLOSED
+Ctrl+Shift+L/C/R and T/M/B align; Ctrl+Shift+H and V distribute. Ctrl+[ and
+Ctrl+] reorder within the stack, with Shift for front and back. All listed in
+the shortcut reference, since an undiscoverable shortcut is one nobody uses.
 
 ### INC-10 · Nudge is not coalesced in history · CLOSED
 > "A drag is one entry, not one per mousemove."
