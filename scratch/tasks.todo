@@ -455,14 +455,13 @@ matches what the drag showed and that a whole drag is still one undo.
 
 ## 5. Environment and infrastructure
 
-### ENV-1 · CI has never been observed green · OPEN
-The remote exists and `main`, `staging` and both tags are pushed, so the
-blocking half of this is gone. `.github/workflows/ci.yml` is valid YAML with
-2 jobs and 17 steps, but validity is not the same as passing and no run has
-been watched.
-
-- Needed: confirm the first run is green and fix whatever it finds.
-- Until then every "all gates pass" claim rests on local runs only.
+### ENV-1 · CI has never been observed green · CLOSED
+It had not: all 18 runs to 2026-09-23 failed, every one on the same two
+tests. `e2e/measure.spec.ts` found 215 of 300 strings off by up to 5.4pt on
+Linux, where Chrome measures canvas text with FreeType-hinted advances. The
+fix (`textRendering: geometricPrecision` on the harness and the studio
+canvas) went green on run 35852798867, both jobs. GitHub now warns that the
+v4 actions target Node 20; they run on Node 24 regardless.
 
 ### ENV-2 · Vercel CLI not installed · YOURS
 `npm i -g vercel` then `vercel login && vercel link`. README.md and
