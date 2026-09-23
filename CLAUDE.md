@@ -424,15 +424,30 @@ Notes:
 
 ---
 
-## 8. Non-Goals (v1)
+## 8. Scope
 
-Repeaters/seating charts · conditional visibility · visual query builder · stress-test filters ·
-duplex/back sides · arbitrary user tables · rich text (mixed styles in one text object) ·
-ICC/PDF-X colour management · text shaping for complex scripts · auth · cloud sync · mobile layout.
+### v1.1 — data-driven design (in progress)
 
-Several are scheduled for v1.1–v1.3. None should be speculatively designed for now — except the
-`.toke` file format, which is versioned from day one and must accommodate multiple designs per
-project.
+Decided 2026-09-23. The record source is the rule engine: SQL computes columns, and canvas
+properties bind to them. One rule language, not a second one on the canvas.
+
+- **Record source per design**, saved in the `.toke` file.
+- **Arbitrary user tables** — CSV import creates a table from the file's own columns.
+- **Column-bound properties** — visibility, fill/stroke colour, image (asset by name) and
+  position/size, resolved in the same row pass as tokens, honoured by canvas, pre-flight and PDF.
+  Bound objects carry the `--conditional` badge in the layers tree.
+- **Variant layouts** — separate designs export separately by default; when trims match, a
+  column can pick the design per row and one imposed run mixes them.
+- **Rule builder** — writes the SQL for users who don't, and shows what it wrote.
+
+### Non-goals
+
+Repeaters/seating charts (v1.2) · stress-test filters · duplex/back sides · rich text (mixed styles
+in one text object) · ICC/PDF-X colour management · text shaping for complex scripts · auth ·
+cloud sync · mobile layout.
+
+None should be speculatively designed for now — except the `.toke` file format, which is
+versioned from day one and must accommodate multiple designs per project.
 
 ---
 
