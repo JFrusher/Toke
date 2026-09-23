@@ -44,7 +44,7 @@ test('imports a CSV and renders the rows', async ({ page }) => {
   await page.getByTestId('csv-confirm').click();
 
   await expect(page.getByRole('grid')).toContainText('Lovelace');
-  await expect(page.getByRole('grid')).toContainText('3 records');
+  await expect(page.getByTestId('bottom-dock')).toContainText('3 records');
 });
 
 test('reports a malformed CSV instead of importing it', async ({ page }) => {
