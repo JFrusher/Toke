@@ -29,7 +29,7 @@ async function placeTextAndSelect(page: Page) {
   const box = await page.getByTestId('canvas-viewport').boundingBox();
   if (box === null) throw new Error('viewport has no box');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 }
 
 test('starter schema fields are bindable before any import', async ({ page }) => {
@@ -50,7 +50,7 @@ test('columns added by an import become bindable', async ({ page }) => {
   await expect(page.getByTestId('insert-nickname')).toHaveCount(0);
 
   await importCsv(page, WITH_NICKNAME);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   await expect(page.getByTestId('insert-nickname')).toBeVisible();
 });
@@ -180,7 +180,7 @@ test('binding survives a save and reopen', async ({ page }) => {
     buffer: await readFile(await saved.path()),
   });
 
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
   await expect(page.getByTestId('binding-text')).toHaveValue('{{ first_name | upper }}');
   await expect(page.getByTestId('bound-badge')).toBeVisible();
 });

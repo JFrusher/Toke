@@ -94,7 +94,7 @@ test('text typed on the canvas reaches the scene node', async ({ page }) => {
 
   // The binding field reads node.text — the same string the PDF renderer
   // resolves. Reading the Fabric object instead would prove nothing.
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
   await expect(page.getByTestId('binding-text')).toHaveValue('Ada Lovelace');
 });
 
@@ -103,7 +103,7 @@ test('a canvas text edit survives undo and redo', async ({ page }) => {
   const at = await placeText(page);
 
   await editInPlace(page, at, 'Grace Hopper');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
   await expect(page.getByTestId('binding-text')).toHaveValue('Grace Hopper');
 
   // One undo takes back the edit, not the placement: an edit that never
@@ -126,6 +126,6 @@ test('typing on the canvas does not fire tool shortcuts', async ({ page }) => {
   await editInPlace(page, at, 'Rectangle');
 
   await expect(page.getByTestId('canvas-viewport')).toHaveAttribute('data-fabric-objects', '1');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
   await expect(page.getByTestId('binding-text')).toHaveValue('Rectangle');
 });

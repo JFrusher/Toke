@@ -39,7 +39,7 @@ test('the fit control appears only for a selected image', async ({ page }) => {
   await expect(page.getByTestId('image-fit-contain')).toHaveCount(0);
 
   await placeImage(page);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   // Fit, not contain: "cover" means nothing to someone laying out a card.
   await expect(page.getByTestId('image-fit-contain')).toBeChecked();
@@ -49,7 +49,7 @@ test('the fit control appears only for a selected image', async ({ page }) => {
 test('changing the fit mode is undoable', async ({ page }) => {
   await ready(page);
   await placeImage(page);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   await page.getByTestId('image-fit-cover').click();
   await expect(page.getByTestId('image-fit-cover')).toBeChecked();
@@ -61,7 +61,7 @@ test('changing the fit mode is undoable', async ({ page }) => {
 test('resizing the frame keeps the image inside it', async ({ page }) => {
   await ready(page);
   await placeImage(page);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const width = page.getByTestId('field-w');
   await width.fill('40');

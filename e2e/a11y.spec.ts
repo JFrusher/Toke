@@ -158,7 +158,7 @@ test('the canvas is operable from the keyboard', async ({ page }) => {
   const box = await page.getByTestId('canvas-viewport').boundingBox();
   if (box === null) throw new Error('viewport has no box');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const x = page.getByTestId('field-x');
   const before = Number((await x.inputValue()).replace(/[^\d.-]/g, ''));

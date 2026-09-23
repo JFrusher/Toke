@@ -88,10 +88,18 @@ export default function StudioPage() {
       }
 
       // Bracket keys reorder within the stack, as they do in every layout tool.
-      if (modifier && (event.key === '[' || event.key === ']')) {
+      // Matched on `code` as well as `key`: with a modifier held, some
+      // layouts report a different `key` for the bracket keys entirely.
+      const bracket =
+        event.code === 'BracketRight' || event.key === ']'
+          ? 'right'
+          : event.code === 'BracketLeft' || event.key === '['
+            ? 'left'
+            : null;
+      if (modifier && bracket !== null) {
         event.preventDefault();
         store.reorderSelection(
-          event.key === ']'
+          bracket === 'right'
             ? event.shiftKey
               ? 'front'
               : 'forward'
