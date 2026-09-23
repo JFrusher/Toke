@@ -83,7 +83,7 @@ test('space does not pan while typing', async ({ page }) => {
   // A text node, because the binding field is where the spaces go.
   await page.getByTestId('tool-text').click();
   await page.mouse.click(box.x + 260, box.y + 220);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const before = await leftmostRulerValue(page);
 
@@ -102,11 +102,12 @@ test('align shortcuts move the selection', async ({ page }) => {
   await placeRect(page, { x: box.x + 400, y: box.y + 320 });
 
   // Select both through the layers tree, then align left from the keyboard.
-  await page.getByRole('treeitem').first().getByRole('button').click();
+  await page.getByRole('treeitem').first().getByRole('button').first().click();
   await page
     .getByRole('treeitem')
     .nth(1)
     .getByRole('button')
+    .first()
     .click({ modifiers: ['Shift'] });
 
   await page.keyboard.press('Control+Shift+L');

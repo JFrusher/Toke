@@ -62,7 +62,7 @@ test('the v1 acceptance scenario, end to end', async ({ page }) => {
   const box = await page.getByTestId('canvas-viewport').boundingBox();
   if (box === null) throw new Error('viewport has no box');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   await page.getByTestId('binding-text').fill('{{ first_name }} {{ last_name }}');
   await page.getByTestId('binding-text').blur();
@@ -185,7 +185,7 @@ test('the v1 acceptance scenario, end to end', async ({ page }) => {
   // Identical studio state: the design, the binding AND the data all travelled
   // inside the file. A scene graph without its database is not a project.
   await expect(page.getByTestId('canvas-viewport')).toHaveAttribute('data-fabric-objects', '1');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
   await expect(page.getByTestId('binding-text')).toHaveValue('{{ first_name }} {{ last_name }}');
 
   await page.getByTestId('mode-live').click();

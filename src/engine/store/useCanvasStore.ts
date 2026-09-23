@@ -81,6 +81,10 @@ type CanvasState = Document & {
   setPan: (x: number, y: number) => void;
   zoomToFit: (viewport: { width: number; height: number }) => void;
   setLiveTransform: (live: CanvasState['liveTransform']) => void;
+  renameNode: (id: NodeId, name: string) => void;
+  /** Toggles on the node and every node inside it, for a group. */
+  setNodeVisible: (id: NodeId, visible: boolean) => void;
+  setNodeLocked: (id: NodeId, locked: boolean) => void;
   addGuide: (guide: Guide) => void;
   removeGuide: (id: string) => void;
   clearGuides: () => void;
@@ -130,6 +134,30 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
       apply: (document) => ({ ...document, nodes: next }),
       ...(coalesceKey === undefined ? {} : { coalesceKey }),
     };
+  }
+
+  /**
+   * Applies a change to one node wherever it sits, including inside a group.
+   *
+   * A group's own flag is applied to its children as well: hiding a group and
+   * leaving its contents drawn would be a lie the canvas tells.
+   */
+  function mapTree(
+    nodes: readonly SceneNode[],
+    id: NodeId,
+    change: (node: SceneNode) => SceneNode,
+  ): readonly SceneNode[] {
+    return nodes.map((node) => {
+      if (node.id === id) {
+        const updated = change(node);
+        return updated.kind === 'group'
+          ? { ...updated, children: updated.children.map((child) => change(child)) }
+          : updated;
+      }
+      return node.kind === 'group'
+        ? { ...node, children: mapTree(node.children, id, change) }
+        : node;
+    });
   }
 
   /** Selected nodes, in scene order rather than selection order. */
@@ -246,6 +274,37 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
     },
 
     setLiveTransform: (liveTransform) => set({ liveTransform }),
+
+    renameNode(id, name) {
+      // An empty name would leave a blank row in the tree, which for a
+      // screen-reader user is an object with no identity at all.
+      const trimmed = name.trim();
+      if (trimmed === '') return;
+      run(
+        replace(
+          mapTree(get().nodes, id, (node) => ({ ...node, name: trimmed })),
+          'Rename layer',
+        ),
+      );
+    },
+
+    setNodeVisible(id, visible) {
+      run(
+        replace(
+          mapTree(get().nodes, id, (node) => ({ ...node, visible })),
+          visible ? 'Show layer' : 'Hide layer',
+        ),
+      );
+    },
+
+    setNodeLocked(id, locked) {
+      run(
+        replace(
+          mapTree(get().nodes, id, (node) => ({ ...node, locked })),
+          locked ? 'Lock layer' : 'Unlock layer',
+        ),
+      );
+    },
     addGuide: (guide) => set({ guides: [...get().guides, guide] }),
     // Guides are not history: they are scaffolding the user puts up and takes
     // down, and filling the undo stack with them would bury the edits that

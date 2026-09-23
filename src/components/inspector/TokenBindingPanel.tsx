@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/Button';
 import type { AutoFitConfig, TextNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { useStudioStore } from '@/engine/store/useStudioStore';
+import { getFont } from '@/engine/text/fontLoader';
 import { FORMATTER_NAMES, isTokenised, parseTokens } from '@/engine/tokens/parser';
+import { renderTextNode } from '@/engine/tokens/render';
 import { points } from '@/engine/units/types';
 import { cn } from '@/lib/cn';
 
@@ -19,6 +22,9 @@ export function TokenBindingPanel() {
   const selection = useCanvasStore((s) => s.selection);
   const replaceNodes = useCanvasStore((s) => s.replaceNodes);
   const columns = useDataStore((s) => s.columns);
+  const records = useDataStore((s) => s.records);
+  const mode = useStudioStore((s) => s.mode);
+  const cursor = useStudioStore((s) => s.cursor);
 
   const selected = nodes.filter((node) => selection.includes(node.id));
   const node = selected.length === 1 ? selected[0] : undefined;
@@ -36,6 +42,16 @@ export function TokenBindingPanel() {
   const bound = isTokenised(text.text);
   const parsed = parseTokens(text.text);
   const problem = parsed.ok ? null : parsed.error;
+
+  // INC-19: the canvas outlines an overflowing object in rust and pre-flight
+  // lists every affected record, but the panel — the one surface actually
+  // looking at this object — said nothing about the record on screen.
+  const shown = renderTextNode({
+    node: text,
+    font: getFont(text.fontFamily, text.fontWeight, text.italic),
+    mode,
+    row: (records[cursor] ?? null) as Record<string, unknown> | null,
+  });
 
   function update(patch: Partial<TextNode>, label: string) {
     replaceNodes(
@@ -83,6 +99,22 @@ export function TokenBindingPanel() {
       {problem !== null && (
         <p role="alert" data-testid="binding-error" className="text-[11px] text-overflow">
           {problem.message}
+        </p>
+      )}
+
+      {shown.error !== null && (
+        <p role="alert" data-testid="binding-resolve-error" className="text-[11px] text-overflow">
+          {shown.error.message}
+        </p>
+      )}
+
+      {shown.overflow && (
+        // A word as well as the colour (§4.7), and it names the record rather
+        // than saying "some record somewhere" — which is what pre-flight is
+        // for.
+        <p data-testid="binding-overflow" className="text-[11px] text-overflow">
+          Overflows at the minimum size on record {cursor + 1}. Shown at{' '}
+          <span data-numeric>{Math.round(shown.fontSize * 10) / 10}pt</span>.
         </p>
       )}
 

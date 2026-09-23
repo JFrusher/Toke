@@ -14,6 +14,7 @@ import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { useImpositionStore } from '@/engine/store/useImpositionStore';
+import { useStudioStore } from '@/engine/store/useStudioStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
 import { isErr } from '@/lib/result';
@@ -28,6 +29,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
   const nodes = useCanvasStore((s) => s.nodes);
   const artboard = useCanvasStore((s) => s.artboard);
   const records = useDataStore((s) => s.records);
+  const cursor = useStudioStore((s) => s.cursor);
 
   const preset = useImpositionStore((s) => s.preset);
   const orientation = useImpositionStore((s) => s.orientation);
@@ -39,7 +41,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
   const [error, setError] = useState<AppError | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
 
-  async function run() {
+  async function run(op: 'export' | 'proof' = 'export') {
     setError(null);
     setProgress(0);
 
@@ -55,7 +57,9 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
       worker,
       {
         nodes: serialiseForExport(nodes),
-        rows: records,
+        // A proof is one record — the one being previewed — so the worker is
+        // handed that row alone rather than the whole run.
+        rows: op === 'proof' ? records.slice(cursor, cursor + 1) : records,
         sheet: sheetPreset(preset, orientation),
         design: designSpec({
           width: points(artboard.width),
@@ -67,6 +71,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
         assets,
       },
       setProgress,
+      op,
     );
     cancelRef.current = handle.cancel;
 
@@ -81,7 +86,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
       return;
     }
 
-    downloadPdf(result.value.bytes, 'toke.pdf');
+    downloadPdf(result.value.bytes, op === 'proof' ? 'toke-proof.pdf' : 'toke.pdf');
     onClose();
   }
 
@@ -91,7 +96,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
     <Modal open={open} onClose={onClose} title="Export PDF">
       <div className="flex flex-col gap-3">
         <p data-numeric className="text-[13px] text-ink-muted">
-          {records.length} records
+          {records.length} records · proof shows record {Math.min(cursor + 1, records.length)}
         </p>
 
         {running && (
@@ -119,7 +124,19 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
               Close
             </Button>
           )}
-          <Button onClick={run} disabled={running || records.length === 0} data-testid="run-export">
+          <Button
+            variant="quiet"
+            onClick={() => void run('proof')}
+            disabled={running || records.length === 0}
+            data-testid="run-proof"
+          >
+            Proof this record
+          </Button>
+          <Button
+            onClick={() => void run('export')}
+            disabled={running || records.length === 0}
+            data-testid="run-export"
+          >
             Export
           </Button>
         </div>

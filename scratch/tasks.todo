@@ -79,11 +79,10 @@ rectangle) and INC-35 (no aspect lock on resize).
 `PathNode` and the Fabric mapping exist; the drawing interaction does not.
 Large interaction (anchors, bezier handles).
 
-### BLK-3 · Token-bound indicator in the layers tree · OPEN (unblocked) · from P3.10
-**Unblocked by P6.** `isTokenised(node.text)` now answers this. `LayersPanel`
-still hardcodes `const bound = false`; the inspector shows a bound badge but
-the layer tree does not. Render the `--bound` colour **plus** a text label —
-CLAUDE.md §4.7 forbids signalling state by colour alone.
+### BLK-3 · Token-bound indicator in the layers tree · CLOSED
+`const bound = false` is gone; the tree reads `isTokenised(node.text)`, and a
+group counts as bound when anything inside it is. The badge renders the word
+"bound" as well as the `--bound` colour, per §4.7.
 
 ### BLK-4 · Diagnostics panel wiring · CLOSED by P9.2 · from P2.1, P3
 Errors currently surface as one-off `role="alert"` paragraphs. Every
@@ -148,11 +147,18 @@ that the gesture only worked on empty pasteboard, which is where it is least
 needed. Space is ignored while typing, and the held state is released on
 window blur so alt-tabbing mid-drag cannot leave the canvas stuck in pan mode.
 
-### INC-4 · Layers panel is read-only · OPEN · P3.10
+### INC-4 · Layers panel is read-only · CLOSED
 > "Reorder by drag, rename, toggle visibility/lock, select."
 
-Only **select** is implemented. `visible` and `locked` exist on every node and
-are honoured by the Fabric mapping, but there is no UI to change them.
+Rename (double-click or F2, Escape abandons), visibility and lock toggles, and
+reorder. All four are undoable.
+
+Reorder is by keyboard and toolbar rather than drag — Ctrl+[ and Ctrl+] with
+Shift for front and back. A drag-reorder in a tree is pointer-only unless it is
+built twice, and §4.7 asks for the keyboard path regardless.
+
+Hiding or locking a group applies to its children too: a hidden group whose
+contents still draw would be a lie the canvas tells.
 
 ### INC-5 · Data grid: column resize · OPEN · P2.6
 > "Sort, column resize, inline cell edit, row add/delete."
@@ -239,10 +245,10 @@ the main thread before the query is sent. Live Mode and pre-flight both read
 Still open as INC-21: there is no UI to EDIT the record source, so it is
 always the default `SELECT * FROM guests`.
 
-### INC-19 · Overflow is not shown in the binding panel · OPEN · P6.6
-The canvas draws a rust outline and pre-flight lists every affected record,
-but the binding panel itself does not say the currently previewed record
-overflows.
+### INC-19 · Overflow is not shown in the binding panel · CLOSED
+The panel now names the record and the size it had to shrink to, and shows
+resolution errors alongside parse errors. It is the surface actually looking
+at the object, so it was the one place the information was missing.
 
 ### INC-21 · No record-source editor · CLOSED by P9.3
 The SQL console is the editor. A design can print only accepted guests by
@@ -279,10 +285,10 @@ asserted in `assemble.golden.test.ts`; memory is not measured anywhere, and
 the whole document is held in memory until `finish`. Streaming incremental
 save is the fix if a run ever exceeds it.
 
-### INC-27 · Proof export is not reachable from the UI · OPEN · P8.9
-`exportProof` and the worker's `proof` op both exist and are tested, but
-nothing in the shell calls them — the Export dialog only runs a full sheet
-export. Needs a "Proof current record" action.
+### INC-27 · Proof export is not reachable from the UI · CLOSED
+"Proof this record" in the export dialog runs the worker's `proof` op against
+the record currently being previewed and downloads `toke-proof.pdf` — one page
+at trim size, no imposition, no marks.
 
 ### INC-33 · Undo was a no-op for every inspector edit · CLOSED
 The replacement command built its inverse lazily — `previous ??= document.nodes`
