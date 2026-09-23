@@ -232,6 +232,31 @@ describe('scale', () => {
     expect(report.sheetCount).toBe(50);
     expect(elapsed).toBeLessThan(30_000);
   });
+
+  it('stays inside the memory half of the budget', async () => {
+    // INC-26. The plan's budget is 500 records under 30s AND under 1GB, and
+    // only the time half was ever asserted. The whole document is held in
+    // memory until finish(), so this is the number that would grow with a run.
+    //
+    // Peak is sampled while the export runs rather than read once at the end:
+    // by then the intermediate objects may already have been collected.
+    let peak = process.memoryUsage().heapUsed;
+    const sampler = setInterval(() => {
+      peak = Math.max(peak, process.memoryUsage().heapUsed);
+    }, 5);
+
+    try {
+      const { bytes } = await run(500);
+      peak = Math.max(peak, process.memoryUsage().heapUsed);
+
+      const megabytes = peak / 1024 / 1024;
+      expect(megabytes).toBeLessThan(1024);
+      // And the file itself: 500 cards sharing one font subset is small.
+      expect(bytes.byteLength).toBeLessThan(5 * 1024 * 1024);
+    } finally {
+      clearInterval(sampler);
+    }
+  });
 });
 
 describe('progress and cancellation', () => {

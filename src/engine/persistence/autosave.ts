@@ -92,6 +92,64 @@ export async function clearRecovery(): Promise<void> {
   await run('readwrite', (store) => store.clear());
 }
 
+const WRITER_LOCK = 'toke-autosave-writer';
+
+/**
+ * INC-14 — one writer per browser profile.
+ *
+ * Every tab shares the one recovery snapshot, so two tabs autosaving means the
+ * last write wins and the other tab's work is silently gone from recovery. The
+ * first tab holds a Web Lock for its lifetime; later tabs queue behind it and
+ * take over when it closes. The lock is released by the browser when a tab
+ * dies, so a crash cannot leave the snapshot orphaned.
+ *
+ * `onChange(false)` fires once when another tab already writes, `onChange(true)`
+ * when this tab becomes the writer. Returns the release.
+ */
+export function claimWriter(
+  onChange: (writer: boolean) => void,
+  locks: LockManager | null = globalThis.navigator?.locks ?? null,
+): () => void {
+  // No Web Locks (very old browser): behave as before, one tab writing.
+  if (locks === null) {
+    onChange(true);
+    return () => {};
+  }
+
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const abort = new AbortController();
+
+  // Hold until released: the lock lasts as long as the callback's promise.
+  const hold = () => {
+    onChange(true);
+    return held;
+  };
+
+  void locks
+    .request(WRITER_LOCK, { ifAvailable: true }, (lock) => {
+      if (lock !== null) return hold();
+      onChange(false);
+      // ifAvailable and signal cannot be combined, so the queued request is a
+      // second call. Aborting it on release rejects its promise, which is the
+      // expected end of a tab that never got to write.
+      locks.request(WRITER_LOCK, { signal: abort.signal }, hold).catch((error: unknown) => {
+        if (!abort.signal.aborted) throw error;
+      });
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      if (!abort.signal.aborted) throw error;
+    });
+
+  return () => {
+    abort.abort();
+    release();
+  };
+}
+
 export type Autosave = {
   /** Restart the debounce. Safe to call on every edit. */
   schedule: () => void;
@@ -104,6 +162,8 @@ export type Autosave = {
 export function createAutosave(options: {
   produce: () => Promise<Snapshot>;
   delayMs?: number;
+  /** False while another tab owns the snapshot; see `claimWriter`. */
+  canWrite?: () => boolean;
   onError?: (error: ReturnType<typeof appError>) => void;
 }): Autosave {
   const delay = options.delayMs ?? 2000;
@@ -112,6 +172,9 @@ export function createAutosave(options: {
   let disposed = false;
 
   async function write() {
+    // Stays pending while another tab writes, so flush() on takeover writes
+    // the edits made while waiting — and writes nothing if there were none.
+    if (options.canWrite?.() === false) return;
     pending = false;
     try {
       const snapshot = await options.produce();

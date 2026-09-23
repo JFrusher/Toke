@@ -241,11 +241,14 @@ back into their own slots on save, so saving can no longer lose a design just
 because it was not on screen. The last design cannot be removed — a project
 with none has nothing to print.
 
-### INC-14 · No BroadcastChannel single-writer lock · OPEN · P4.4
-> "BroadcastChannel single-writer lock, crash-recovery prompt."
-
-Recovery works. The lock does not exist: two tabs open on the same project
-both autosave, and the last write wins silently.
+### INC-14 · No single-writer lock for autosave · CLOSED
+`claimWriter` in `engine/persistence/autosave.ts` takes a Web Lock for the
+tab's lifetime — the native single-writer primitive, which the browser also
+releases when a tab crashes, so no heartbeat protocol over BroadcastChannel is
+needed. A second tab reports `AUTOSAVE_OTHER_TAB` in diagnostics and skips its
+writes; skipped edits stay pending, so when the first tab closes the second
+takes over and flushes them. Tested in `writerLock.test.ts` against Node's
+real `navigator.locks`.
 
 ### INC-15 · Only the bundled Plex faces load · CLOSED
 TrueType and OpenType upload, with a family picker that reads the font
@@ -284,14 +287,11 @@ running the filter and pressing "Use as record source"; the templates ship
 with exactly that query. A simpler filter control on top of it remains
 possible but is no longer blocking anything.
 
-### INC-22 · Pre-flight does not check images or fonts · OPEN · P7.3
-> "Report per-record: text overflow, unresolved tokens, missing assets."
-
-Overflow, unresolved and empty are covered. Missing assets are not, because
-image placement does not exist yet (BLK-1) — though the PDF renderer now
-errors with `PDF_ASSET_MISSING` rather than exporting a hole, so the failure
-is loud at export time even without a pre-flight check. A missing font face
-is also unchecked: `getFont` returning null silently skips the fit check.
+### INC-22 · Pre-flight does not check images or fonts · CLOSED
+`structuralFindings` in `preflight.ts` reports an image whose asset is not in
+the asset store (`asset`) and a text node whose face cannot be found at all
+(`font`). Structural findings are per node, not per record: a missing logo is
+one problem, not 500. The report lists both kinds with a count.
 
 ### INC-23 · Cover images overflow their frame in the PDF · CLOSED
 The renderer now emits a clip path for cover-fit images, balanced with the
@@ -299,19 +299,16 @@ graphics state so it cannot leak into the next card on the sheet. The fit
 maths moved to `engine/scene/image.ts`, which the canvas and the PDF renderer
 both call — one definition of what 'cover' means.
 
-### INC-24 · Export sends every registered font, not just the used faces · OPEN · P8.8
-`fontsForExport` ships the whole registry across the worker boundary because
-the worker has its own empty registry and a missing fallback face would fail
-mid-render. Subsetting makes the embedded cost near-zero, but the postMessage
-copy is ~218KB per face. Narrow to referenced faces once the scene records
-which it uses.
+### INC-24 · Export sends every registered font, not just the used faces · CLOSED
+`fontsForExport(nodes)` walks the scene and ships only the faces `getFont`
+actually resolves to — the substituted face, not the requested one, since
+that is what the worker will draw with. Unit-tested in `exportClient.test.ts`.
 
-
-### INC-26 · Export has no memory ceiling · OPEN · P8.8
-The plan's budget is 500 records under 30s and under 1GB. The 30s half is
-asserted in `assemble.golden.test.ts`; memory is not measured anywhere, and
-the whole document is held in memory until `finish`. Streaming incremental
-save is the fix if a run ever exceeds it.
+### INC-26 · Export has no memory ceiling · CLOSED
+`assemble.golden.test.ts` now samples peak heap during a 500-record export
+and asserts it under 1GB, alongside the existing 30s assertion. It passes
+with wide margin, so incremental save stays unbuilt until a real run says
+otherwise.
 
 ### INC-27 · Proof export is not reachable from the UI · CLOSED
 "Proof this record" in the export dialog runs the worker's `proof` op against
@@ -360,11 +357,10 @@ Fixed by bundling `plex-sans-500-normal.ttf`, with a fitness test asserting
 that every weight the scene graph can ask for is actually shipped and that
 each bundled URL resolves to a file in `public/`.
 
-### INC-31 · Pre-flight does not check font availability · OPEN · P7.3, P9.4
-`getFont` now substitutes the nearest weight instead of returning null, so a
-missing face is silent rather than fatal. Pre-flight should report the
-substitution before export, not after the cards are printed a weight lighter
-than the proof.
+### INC-31 · Pre-flight does not check font availability · CLOSED
+Pre-flight compares the face each text node asks for with the face `getFont`
+returns and reports a substitution ("IBM Plex Sans 500 is not loaded;
+printing in 400 instead") before export, not after the cards are printed.
 
 ### INC-32 · The e2e suite is contention-sensitive · KNOWN · P9.5
 117 tests, two workers, each booting a SQLite WASM worker against one

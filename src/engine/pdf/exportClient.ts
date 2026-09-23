@@ -1,7 +1,8 @@
 import type { ExportJob, ExportMessage, ExportRequest } from '@/engine/pdf/exportProtocol';
 import { getAsset } from '@/engine/persistence/assetStore';
-import type { SceneNode as Node, SceneNode } from '@/engine/scene/types';
-import { registeredFonts } from '@/engine/text/fontLoader';
+import type { SceneNode as Node, SceneNode, TextNode } from '@/engine/scene/types';
+import { walk } from '@/engine/scene/types';
+import { getFont, registeredFonts } from '@/engine/text/fontLoader';
 import { appError } from '@/lib/errors';
 import { err, ok, type Result } from '@/lib/result';
 
@@ -25,8 +26,27 @@ export type ExportHandle = {
  * registry; sending only the faces the scene references would break the
  * moment a token resolved to text in a fallback face.
  */
-export function fontsForExport(): ExportJob['fonts'] {
-  return registeredFonts().map((font) => ({
+export function fontsForExport(nodes?: readonly SceneNode[]): ExportJob['fonts'] {
+  // With a scene, only the faces it actually resolves to. Every face is ~218KB
+  // copied across the worker boundary, so sending the whole registry for a
+  // card that uses one weight quadruples the payload for nothing.
+  //
+  // The face getFont RESOLVES to is what is sent, not the one requested: when
+  // a weight falls back, the worker's own getFont makes the same choice from
+  // the same family, so canvas and PDF still read one file.
+  const faces =
+    nodes === undefined
+      ? registeredFonts()
+      : [
+          ...new Set(
+            [...walk(nodes)]
+              .filter((node): node is TextNode => node.kind === 'text')
+              .map((node) => getFont(node.fontFamily, node.fontWeight, node.italic))
+              .filter((font): font is NonNullable<typeof font> => font !== null),
+          ),
+        ];
+
+  return faces.map((font) => ({
     // cssFamily, NOT family: the design references the family it was
     // registered under, while `family` is whatever the file calls itself —
     // "IBM Plex Sans SemiBold" for a face a design knows as "IBM Plex Sans",
@@ -76,7 +96,7 @@ export function startExport(
   /** 'proof' renders one record at trim size with no imposition or marks. */
   op: 'export' | 'proof' = 'export',
 ): ExportHandle {
-  const payload: ExportJob = { ...job, fonts: job.fonts ?? fontsForExport() };
+  const payload: ExportJob = { ...job, fonts: job.fonts ?? fontsForExport(job.nodes) };
 
   const result = new Promise<Result<{ bytes: Uint8Array; sheetCount: number; emptyCells: number }>>(
     (resolve) => {
