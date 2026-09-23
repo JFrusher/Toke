@@ -169,5 +169,5 @@ test('Live Mode previews the record source, not the whole table', async ({ page 
   await expect(page.getByTestId('record-counter')).toHaveText('1 / 3');
 
   await openDock(page);
-  await expect(page.getByRole('grid')).toContainText('3 records');
+  await expect(page.getByTestId('bottom-dock')).toContainText('3 records');
 });

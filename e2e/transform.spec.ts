@@ -21,7 +21,7 @@ async function placeRect(page: Page, at: { x: number; y: number }) {
   await page.mouse.click(at.x, at.y);
 }
 
-const valueOf = async (page: Page, field: string) =>
+const fieldValue = async (page: Page, field: string) =>
   Number((await page.getByTestId(field).inputValue()).replace(/[^\d.-]/g, ''));
 
 test('the transform fields track a drag while it happens', async ({ page }) => {
@@ -30,7 +30,7 @@ test('the transform fields track a drag while it happens', async ({ page }) => {
   if (box === null) throw new Error('viewport has no box');
 
   await placeRect(page, { x: box.x + 300, y: box.y + 260 });
-  const before = await valueOf(page, 'field-x');
+  const before = await fieldValue(page, 'field-x');
 
   await page.mouse.move(box.x + 320, box.y + 280);
   await page.mouse.down();
@@ -38,7 +38,7 @@ test('the transform fields track a drag while it happens', async ({ page }) => {
 
   // Still holding the mouse down: the criterion is that this updates DURING
   // the drag, not when it ends.
-  await expect.poll(() => valueOf(page, 'field-x')).toBeGreaterThan(before + 10);
+  await expect.poll(() => fieldValue(page, 'field-x')).toBeGreaterThan(before + 10);
 
   await page.mouse.up();
 });
@@ -53,12 +53,12 @@ test('the committed value matches what the drag showed', async ({ page }) => {
   await page.mouse.move(box.x + 320, box.y + 280);
   await page.mouse.down();
   await page.mouse.move(box.x + 440, box.y + 280, { steps: 8 });
-  const during = await valueOf(page, 'field-x');
+  const during = await fieldValue(page, 'field-x');
   await page.mouse.up();
 
   // A live readout that disagrees with the committed node would be worse than
   // no readout at all.
-  await expect.poll(() => valueOf(page, 'field-x')).toBeCloseTo(during, 1);
+  await expect.poll(() => fieldValue(page, 'field-x')).toBeCloseTo(during, 1);
 });
 
 test('a drag is still one undo despite the live updates', async ({ page }) => {
@@ -67,7 +67,7 @@ test('a drag is still one undo despite the live updates', async ({ page }) => {
   if (box === null) throw new Error('viewport has no box');
 
   await placeRect(page, { x: box.x + 300, y: box.y + 260 });
-  const before = await valueOf(page, 'field-x');
+  const before = await fieldValue(page, 'field-x');
 
   await page.mouse.move(box.x + 320, box.y + 280);
   await page.mouse.down();
@@ -76,7 +76,7 @@ test('a drag is still one undo despite the live updates', async ({ page }) => {
 
   // The live readout must not push a command per mousemove.
   await page.getByTestId('undo').click();
-  await expect.poll(() => valueOf(page, 'field-x')).toBeCloseTo(before, 1);
+  await expect.poll(() => fieldValue(page, 'field-x')).toBeCloseTo(before, 1);
 });
 
 test('typing in a field is not overwritten by the canvas', async ({ page }) => {
@@ -93,7 +93,7 @@ test('typing in a field is not overwritten by the canvas', async ({ page }) => {
   await expect(page.getByTestId('field-x')).toHaveValue('42');
 
   await page.getByTestId('field-x').blur();
-  await expect.poll(() => valueOf(page, 'field-x')).toBeCloseTo(42, 1);
+  await expect.poll(() => fieldValue(page, 'field-x')).toBeCloseTo(42, 1);
 });
 
 test('Shift locks the aspect ratio while resizing', async ({ page }) => {
@@ -107,12 +107,12 @@ test('Shift locks the aspect ratio while resizing', async ({ page }) => {
   await page.getByTestId('field-h').fill('20');
   await page.getByTestId('field-h').blur();
 
-  const ratio = (await valueOf(page, 'field-w')) / (await valueOf(page, 'field-h'));
+  const ratio = (await fieldValue(page, 'field-w')) / (await fieldValue(page, 'field-h'));
 
   // Grab the bottom-right handle. The object starts at the placement point,
   // so the handle sits at placement + size on screen.
-  const w = await valueOf(page, 'field-w');
-  const h = await valueOf(page, 'field-h');
+  const w = await fieldValue(page, 'field-w');
+  const h = await fieldValue(page, 'field-h');
   const zoom =
     Number.parseInt(
       ((await page.getByTestId('zoom-level').textContent()) ?? '100%').replace('%', ''),
@@ -131,6 +131,6 @@ test('Shift locks the aspect ratio while resizing', async ({ page }) => {
   await page.mouse.up();
   await page.keyboard.up('Shift');
 
-  const after = (await valueOf(page, 'field-w')) / (await valueOf(page, 'field-h'));
+  const after = (await fieldValue(page, 'field-w')) / (await fieldValue(page, 'field-h'));
   expect(after).toBeCloseTo(ratio, 1);
 });

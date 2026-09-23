@@ -50,7 +50,7 @@ test('the v1 acceptance scenario, end to end', async ({ page }) => {
   await importCsv(page, guestCsv());
 
   await page.getByTestId('toggle-data').click();
-  await expect(page.getByRole('grid')).toContainText('150 records');
+  await expect(page.getByTestId('bottom-dock')).toContainText('150 records');
 
   // ── Design an 85 x 55mm place card ───────────────────────────────────────
   // The default artboard is already the trim; the imposition panel reports it.
