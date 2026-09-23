@@ -126,6 +126,7 @@ export type TableColumn = {
   readonly declaredType: string;
   readonly notNull: boolean;
   readonly primaryKey: boolean;
+  readonly hasDefault: boolean;
 };
 
 export function tableColumns(db: DatabaseHandle, table: string): Result<readonly TableColumn[]> {
@@ -154,5 +155,6 @@ export function toTableColumns(rows: readonly Row[]): readonly TableColumn[] {
     declaredType: String(row.type ?? ''),
     notNull: row.notnull === 1,
     primaryKey: row.pk === 1,
+    hasDefault: row.dflt_value !== null && row.dflt_value !== undefined,
   }));
 }

@@ -41,6 +41,9 @@ export function DataGrid() {
   const updateCell = useDataStore((s) => s.updateCell);
   const deleteRow = useDataStore((s) => s.deleteRow);
   const addRow = useDataStore((s) => s.addRow);
+  const table = useDataStore((s) => s.table);
+  const schema = useDataStore((s) => s.schema);
+  const setTable = useDataStore((s) => s.setTable);
 
   /**
    * Per-column widths in pixels, keyed by column name.
@@ -348,6 +351,19 @@ export function DataGrid() {
       </div>
 
       <footer className="flex shrink-0 items-center gap-3 border-hairline-strong border-t bg-panel px-3 py-1.5 text-[11px] text-ink-muted">
+        <select
+          value={table}
+          onChange={(event) => void setTable(event.target.value)}
+          aria-label="Table"
+          data-testid="grid-table"
+          className="h-6 rounded-[2px] border border-border-control bg-panel-raised px-1 font-mono text-[11px] text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+        >
+          {Object.keys(schema).map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
         <span data-numeric>
           {sorted.length} {sorted.length === 1 ? 'record' : 'records'}
         </span>

@@ -9,7 +9,7 @@ import { createWorkerTransport } from '@/engine/db/workerTransport';
 import { DEFAULT_RECORD_SOURCE } from '@/engine/persistence/project';
 import type { AppError } from '@/lib/errors';
 import { appError } from '@/lib/errors';
-import { isErr, type Result } from '@/lib/result';
+import { err, isErr, type Result } from '@/lib/result';
 
 /**
  * Owns the connection to the database worker.
@@ -31,6 +31,11 @@ type DataState = {
   readonly status: DataStatus;
   readonly error: AppError | null;
   readonly table: string;
+  /**
+   * Every user table and its columns, for the table picker and the SQL
+   * console's schema list. Includes tables the user created from a CSV.
+   */
+  readonly schema: Readonly<Record<string, readonly string[]>>;
   /** Everything in the edited table — what the data grid shows. */
   readonly rows: readonly Row[];
   readonly columns: readonly TableColumn[];
@@ -48,6 +53,8 @@ type DataState = {
 
   open: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Shows another table in the grid. */
+  setTable: (table: string) => Promise<void>;
   /**
    * Imports a CSV, optionally with a mapping the user has edited.
    *
@@ -58,6 +65,8 @@ type DataState = {
     csvText: string,
     mode: ImportMode,
     mappings?: readonly ColumnMapping[],
+    /** Defaults to the table in the grid. With mode 'create', the new table's name. */
+    table?: string,
   ) => Promise<Result<ImportReport>>;
   updateCell: (id: number, column: string, value: SqlValue) => Promise<void>;
   addRow: () => Promise<void>;
@@ -76,6 +85,24 @@ type DataState = {
   loadDatabase: (bytes: Uint8Array) => Promise<void>;
 };
 
+/** User tables and their columns, in column order. Internal tables are hidden. */
+const SCHEMA_QUERY = `
+  SELECT m.name AS table_name, p.name AS column_name
+  FROM sqlite_master m JOIN pragma_table_info(m.name) p
+  WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND m.name <> 'schema_version'
+  ORDER BY m.name, p.cid`;
+
+/** Why a name cannot be a new table, or null if it can. */
+export function newTableProblem(
+  name: string,
+  schema: Readonly<Record<string, readonly string[]>>,
+): string | null {
+  if (name.trim() === '') return 'The new table needs a name.';
+  if (name.toLowerCase().startsWith('sqlite_')) return 'Names starting "sqlite_" are reserved.';
+  const taken = Object.keys(schema).some((t) => t.toLowerCase() === name.toLowerCase());
+  return taken ? `There is already a table called ${name}.` : null;
+}
+
 function quote(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
@@ -84,6 +111,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   status: 'idle',
   error: null,
   table: 'guests',
+  schema: {},
   rows: [],
   columns: [],
   recordSource: DEFAULT_RECORD_SOURCE,
@@ -115,6 +143,21 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   async refresh() {
     const db = ensureClient();
+
+    const listed = await db.query(SCHEMA_QUERY);
+    if (isErr(listed)) {
+      set({ error: listed.error });
+      return;
+    }
+    const schema: Record<string, string[]> = {};
+    for (const row of listed.value.rows) {
+      const name = String(row.table_name);
+      schema[name] = [...(schema[name] ?? []), String(row.column_name)];
+    }
+    // A table dropped from the SQL console, or a project without it, falls
+    // back to guests rather than leaving the grid pointing at nothing.
+    if (schema[get().table] === undefined) set({ table: 'guests' });
+    set({ schema });
     const table = get().table;
 
     const info = await db.query(`PRAGMA table_info(${quote(table)})`);
@@ -142,6 +185,12 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   query(sql) {
     return ensureClient().query(sql);
+  },
+
+  async setTable(table) {
+    if (get().schema[table] === undefined) return;
+    set({ table });
+    await get().refresh();
   },
 
   async setRecordSource(sql) {
@@ -179,9 +228,20 @@ export const useDataStore = create<DataState>((set, get) => ({
     });
   },
 
-  async runImport(csvText, mode, mappings) {
+  async runImport(csvText, mode, mappings, into) {
     const db = ensureClient();
-    const table = get().table;
+    const table = into ?? get().table;
+
+    if (mode === 'create') {
+      const problem = newTableProblem(table, get().schema);
+      if (problem !== null) {
+        const failure = appError('CSV_IMPORT_FAILED', problem, {
+          hint: 'Choose another name for the new table.',
+        });
+        set({ error: failure });
+        return err(failure);
+      }
+    }
 
     const { parseCsv, proposeMapping } = await import('@/engine/db/csv');
 
@@ -200,7 +260,12 @@ export const useDataStore = create<DataState>((set, get) => ({
     const plan: ImportPlan = {
       table,
       mode,
-      mappings: mappings ?? proposeMapping(parsed.value.columns, toTableColumns(info.value.rows)),
+      mappings:
+        mappings ??
+        proposeMapping(
+          parsed.value.columns,
+          mode === 'create' ? [] : toTableColumns(info.value.rows),
+        ),
     };
 
     const report = await db.importCsv(parsed.value, plan);
@@ -209,7 +274,8 @@ export const useDataStore = create<DataState>((set, get) => ({
       return report;
     }
 
-    set({ error: null });
+    // A new table is shown straight away: it is what the user just made.
+    set({ error: null, table });
     await get().refresh();
     return report;
   },
@@ -238,8 +304,13 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   async addRow() {
     const db = ensureClient();
+    // Blank text for every column that must be filled and has no default —
+    // on guests that is the two names; a user's own table may have none.
+    const required = get().columns.filter((c) => c.notNull && !c.primaryKey && !c.hasDefault);
     const result = await db.exec(
-      `INSERT INTO ${quote(get().table)} (first_name, last_name) VALUES ('', '')`,
+      required.length === 0
+        ? `INSERT INTO ${quote(get().table)} DEFAULT VALUES`
+        : `INSERT INTO ${quote(get().table)} (${required.map((c) => quote(c.name)).join(', ')}) VALUES (${required.map(() => "''").join(', ')})`,
     );
     if (isErr(result)) {
       set({ error: result.error });

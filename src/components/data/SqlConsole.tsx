@@ -31,6 +31,7 @@ export function SqlConsole() {
   const query = useDataStore((s) => s.query);
   const recordSource = useDataStore((s) => s.recordSource);
   const setRecordSource = useDataStore((s) => s.setRecordSource);
+  const schema = useDataStore((s) => s.schema);
 
   const [sql, setSql] = useState('SELECT * FROM guests');
   const [result, setResult] = useState<ResultTable | null>(null);
@@ -178,9 +179,29 @@ export function SqlConsole() {
       </div>
 
       <aside
-        aria-label="Query history"
+        aria-label="Tables and query history"
         className="w-56 shrink-0 overflow-auto border-hairline-strong border-l"
       >
+        {/* What can be queried. Tables a user imported have whatever columns
+            their file had, and nobody remembers those exactly. */}
+        <h3 className="px-2 py-1.5 font-medium text-[11px] text-ink-muted">Tables</h3>
+        <dl data-testid="sql-schema" className="px-2 pb-2">
+          {Object.entries(schema).map(([table, columns]) => (
+            <div key={table} className="mb-1.5">
+              <dt>
+                <button
+                  type="button"
+                  onClick={() => setSql(`SELECT * FROM "${table.replace(/"/g, '""')}"`)}
+                  className="font-mono text-[11px] text-ink underline-offset-2 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+                >
+                  {table}
+                </button>
+              </dt>
+              <dd className="font-mono text-[11px] text-ink-muted">{columns.join(', ')}</dd>
+            </div>
+          ))}
+        </dl>
+
         <h3 className="px-2 py-1.5 font-medium text-[11px] text-ink-muted">History</h3>
         {history.length === 0 ? (
           <p className="px-2 text-[11px] text-ink-subtle">Nothing run yet.</p>
