@@ -74,10 +74,21 @@ saved `.toke` with the image intact.
 Two follow-ons remain open under their own entries — INC-34 (no crop
 rectangle) and INC-35 (no aspect lock on resize).
 
-### BLK-2 · Pen / path tool · OPEN (unblocked) · from P3.4
-**Unblocked by P8.2** — `renderNode` now draws a `PathNode` via `drawSvgPath`.
-`PathNode` and the Fabric mapping exist; the drawing interaction does not.
-Large interaction (anchors, bezier handles).
+### BLK-2 · Pen / path tool · CLOSED
+Click for corner anchors, drag for smooth curves with mirrored handles, click
+the first anchor to close, Enter to finish, Escape to abandon. The draft stays
+out of the scene graph until it is finished, so a half-drawn path cannot reach
+the PDF, and the whole path is a single undo.
+
+Geometry lives in `engine/canvas/pen.ts`. Its bounds are the exact bezier
+extrema rather than anchors plus handles: Fabric recentres a path on its tight
+curve bounds while the PDF draws `d` from the node origin, so a box that
+included unreached handle tips would place the path differently on screen and
+on paper.
+
+Editing the anchors of an existing path is not built — a finished path can be
+moved, resized, recoloured and deleted, but its points are fixed. Recorded as
+INC-38.
 
 ### BLK-3 · Token-bound indicator in the layers tree · CLOSED
 `const bound = false` is gone; the tree reads `isTokenised(node.text)`, and a

@@ -18,6 +18,9 @@ const GROUPS: readonly { title: string; items: readonly [string, string][] }[] =
       ['R', 'Rectangle'],
       ['E', 'Ellipse'],
       ['L', 'Line'],
+      ['P', 'Pen: click for corners, drag for curves'],
+      ['Enter', 'Finish the path'],
+      ['Click the first point', 'Close the path'],
     ],
   },
   {
