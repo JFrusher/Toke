@@ -14,6 +14,7 @@ import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
 import { ImageFitPanel } from '@/components/inspector/ImageFitPanel';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
+import { TypographyPanel } from '@/components/inspector/TypographyPanel';
 import { PreflightReport } from '@/components/preview/PreflightReport';
 import { DiagnosticsPanel } from '@/components/shell/DiagnosticsPanel';
 import { FileMenu } from '@/components/shell/FileMenu';
@@ -215,6 +216,7 @@ export function AppShell() {
               className="shrink-0 overflow-auto bg-panel"
             >
               <TransformFields />
+              <TypographyPanel />
               <ImageFitPanel />
               <TokenBindingPanel />
               <ImpositionPanel />

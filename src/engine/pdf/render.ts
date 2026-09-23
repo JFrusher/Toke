@@ -13,7 +13,7 @@ import {
 } from 'pdf-lib';
 import type { SheetSpec } from '@/engine/imposition/specs';
 import { embedFont, embedImage, flipY, type PdfContext } from '@/engine/pdf/document';
-import { fitBox, needsClip } from '@/engine/scene/image';
+import { croppedAspect, fitBox, needsClip } from '@/engine/scene/image';
 import type { Fill, SceneNode, Stroke, TextNode } from '@/engine/scene/types';
 import { assertNever } from '@/engine/scene/types';
 import { fontKey, getFont } from '@/engine/text/fontLoader';
@@ -275,9 +275,27 @@ async function renderNode(input: RenderInput, node: SceneNode): Promise<Result<t
       const embedded = await embedImage(input.context, node.assetId, bytes);
       if (isErr(embedded)) return err(embedded.error);
 
-      const aspect = embedded.value.width / embedded.value.height;
+      // The CROPPED aspect, not the file's: fitting the whole image and then
+      // cropping would letterbox the wrong axis.
+      const aspect = croppedAspect(
+        { width: embedded.value.width, height: embedded.value.height },
+        node.crop,
+      );
       const placed = fitBox(node, aspect);
-      const clipped = needsClip(node.fit, node, aspect);
+
+      // A crop is drawn by scaling the whole image up so the wanted region
+      // fills the placed box, then clipping. pdf-lib has no source-rectangle
+      // argument, so this is the only way to express it.
+      const scale = { x: 1 / node.crop.width, y: 1 / node.crop.height };
+      const drawn = {
+        x: placed.x - node.crop.x * placed.width * scale.x,
+        y: placed.y - node.crop.y * placed.height * scale.y,
+        width: placed.width * scale.x,
+        height: placed.height * scale.y,
+      };
+
+      const cropped = node.crop.width < 1 || node.crop.height < 1;
+      const clipped = cropped || needsClip(node.fit, node, aspect);
 
       // A cover image overflows its frame by design; without a clip path it
       // prints over whatever sits beside it, which on an imposed sheet is the
@@ -296,10 +314,10 @@ async function renderNode(input: RenderInput, node: SceneNode): Promise<Result<t
       }
 
       page.drawImage(embedded.value.image, {
-        x: absoluteX + placed.x,
-        y: flipY(sheet, topY + placed.y + placed.height),
-        width: placed.width,
-        height: placed.height,
+        x: absoluteX + drawn.x,
+        y: flipY(sheet, topY + drawn.y + drawn.height),
+        width: drawn.width,
+        height: drawn.height,
         opacity: node.opacity,
         ...rotationOptions(node),
       });

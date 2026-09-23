@@ -109,11 +109,31 @@ export type PathNode = NodeBase & {
 
 export type ImageFit = 'fill' | 'contain' | 'cover';
 
+/**
+ * The visible region of an image, as fractions of its natural size.
+ *
+ * Fractions rather than pixels so a crop survives the picture being replaced
+ * with a different resolution of the same shot, which is exactly what happens
+ * when someone swaps a proof for a print-quality file.
+ *
+ * `{ x: 0, y: 0, width: 1, height: 1 }` is the whole image.
+ */
+export type CropRect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+export const FULL_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
+
 export type ImageNode = NodeBase & {
   readonly kind: 'image';
   /** Content hash into the asset store (P4.1), never a data URI. */
   readonly assetId: string;
   readonly fit: ImageFit;
+  /** Visible region of the source. Absent means the whole image. */
+  readonly crop: CropRect;
 };
 
 export type GroupNode = NodeBase & {

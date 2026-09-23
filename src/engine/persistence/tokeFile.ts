@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { DesignSpec, Orientation, SheetPresetId } from '@/engine/imposition/specs';
 import type { SceneNode } from '@/engine/scene/types';
+import { FULL_CROP } from '@/engine/scene/types';
 import type { Points } from '@/engine/units/types';
 import { appError } from '@/lib/errors';
 import { err, ok, type Result } from '@/lib/result';
@@ -19,7 +20,13 @@ import { err, ok, type Result } from '@/lib/result';
  * through a string.
  */
 
-export const SCHEMA_VERSION = 1;
+/**
+ * 2 — image nodes gained a `crop` rectangle.
+ *
+ * A v1 file has no crop, which means the whole image; `migrate` fills it in on
+ * read so nothing downstream has to know the format changed.
+ */
+export const SCHEMA_VERSION = 2;
 
 const MANIFEST = 'manifest.json';
 const DESIGNS = 'designs.json';
@@ -214,10 +221,35 @@ export async function unpackProject(bytes: Uint8Array): Promise<Result<TokeProje
 
   return ok({
     name: manifest.value.name,
-    designs: designs.value,
+    designs: designs.value.map((design) => ({
+      ...design,
+      nodes: migrateNodes(design.nodes, manifest.value.schemaVersion),
+    })),
     imposition: imposition.value,
     database,
     assets,
     fonts,
+  });
+}
+
+/**
+ * Brings nodes from an older format up to the current one.
+ *
+ * Done on read rather than by version-checking downstream: every consumer sees
+ * current-format nodes, so nothing but this function has to know the file
+ * could be old.
+ */
+function migrateNodes(nodes: readonly SceneNode[], from: number): readonly SceneNode[] {
+  if (from >= SCHEMA_VERSION) return nodes;
+
+  return nodes.map((node) => {
+    if (node.kind === 'group') {
+      return { ...node, children: migrateNodes(node.children, from) };
+    }
+    // v1 → v2: image nodes had no crop, which means the whole image.
+    if (node.kind === 'image' && (node as Partial<typeof node>).crop === undefined) {
+      return { ...node, crop: FULL_CROP };
+    }
+    return node;
   });
 }

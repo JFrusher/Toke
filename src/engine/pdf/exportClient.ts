@@ -27,7 +27,12 @@ export type ExportHandle = {
  */
 export function fontsForExport(): ExportJob['fonts'] {
   return registeredFonts().map((font) => ({
-    family: font.family,
+    // cssFamily, NOT family: the design references the family it was
+    // registered under, while `family` is whatever the file calls itself —
+    // "IBM Plex Sans SemiBold" for a face a design knows as "IBM Plex Sans",
+    // and the foundry's own string for an uploaded one. Sending the wrong one
+    // means the worker cannot find the face and the export fails.
+    family: font.cssFamily,
     weight: font.weight,
     italic: font.italic,
     bytes: font.bytes,
