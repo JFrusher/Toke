@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { preflight, summarise } from '@/engine/preflight/preflight';
-import { rectNode, textNode } from '@/engine/scene/factories';
+import { groupNode, imageNode, rectNode, textNode } from '@/engine/scene/factories';
 import type { SceneNode } from '@/engine/scene/types';
 import { fontBytes, PLEX_SANS_REGULAR } from '@/engine/text/fixtures';
 import { clearFonts, loadFont, registerFont } from '@/engine/text/fontLoader';
@@ -215,5 +215,137 @@ describe('performance', () => {
 
     expect(report.recordCount).toBe(150);
     expect(elapsed).toBeLessThan(2000);
+  });
+});
+
+describe('INC-31 — font availability', () => {
+  // Only Plex Sans 400 upright is registered in this file.
+
+  it('reports a face that is not loaded at all', () => {
+    const report = preflight({
+      nodes: [
+        textNode({
+          id: 't',
+          x: points(0),
+          y: points(0),
+          width: points(100),
+          height: points(20),
+          text: 'Static',
+          fontFamily: 'Garamond',
+        }),
+      ],
+      rows: [{}],
+    });
+
+    const finding = report.findings.find((f) => f.kind === 'font');
+    expect(finding?.nodeId).toBe('t');
+    expect(finding?.recordIndex).toBe(-1);
+  });
+
+  it('reports a substituted weight, which would otherwise be silent', () => {
+    // getFont falls back to the nearest weight so the canvas and PDF agree,
+    // but the cards then print a weight lighter than the design asked for.
+    const report = preflight({
+      nodes: [
+        textNode({
+          id: 't',
+          x: points(0),
+          y: points(0),
+          width: points(100),
+          height: points(20),
+          text: 'Static',
+          fontWeight: 600,
+        }),
+      ],
+      rows: [{}],
+    });
+
+    const finding = report.findings.find((f) => f.kind === 'font');
+    expect(finding).toBeDefined();
+    expect(finding?.detail).toContain('600');
+    expect(finding?.detail).toContain('400');
+  });
+
+  it('checks unbound text too, since static text prints in a face as well', () => {
+    const report = preflight({
+      nodes: [
+        textNode({
+          id: 't',
+          x: points(0),
+          y: points(0),
+          width: points(100),
+          height: points(20),
+          text: 'Table',
+          italic: true,
+        }),
+      ],
+      rows: [{}],
+    });
+    expect(report.findings.some((f) => f.kind === 'font')).toBe(true);
+  });
+
+  it('is clean when the exact face is loaded', () => {
+    const report = preflight({
+      nodes: [
+        textNode({
+          id: 't',
+          x: points(0),
+          y: points(0),
+          width: points(100),
+          height: points(20),
+          text: 'Static',
+        }),
+      ],
+      rows: [{}],
+    });
+    expect(report.findings.filter((f) => f.kind === 'font')).toHaveLength(0);
+  });
+});
+
+describe('INC-22 — missing assets', () => {
+  const photo = imageNode({
+    id: 'photo',
+    x: points(0),
+    y: points(0),
+    width: points(50),
+    height: points(50),
+    assetId: 'abc123',
+  });
+
+  it('reports an image whose bytes are not in the store', () => {
+    const report = preflight({ nodes: [photo], rows: [{}], assetIds: new Set() });
+    const finding = report.findings.find((f) => f.kind === 'asset');
+    expect(finding?.nodeId).toBe('photo');
+    expect(finding?.recordIndex).toBe(-1);
+  });
+
+  it('is clean when the asset is present', () => {
+    const report = preflight({ nodes: [photo], rows: [{}], assetIds: new Set(['abc123']) });
+    expect(report.findings.filter((f) => f.kind === 'asset')).toHaveLength(0);
+  });
+
+  it('skips the asset check when the caller cannot say what exists', () => {
+    // No set means "unknown", not "empty" — reporting every image as missing
+    // would be a false alarm on every run.
+    const report = preflight({ nodes: [photo], rows: [{}] });
+    expect(report.findings.filter((f) => f.kind === 'asset')).toHaveLength(0);
+  });
+
+  it('finds images inside groups', () => {
+    const report = preflight({
+      nodes: [
+        groupNode({
+          id: 'g',
+          x: points(0),
+          y: points(0),
+          width: points(50),
+          height: points(50),
+          children: [photo],
+        }),
+      ],
+      rows: [{}],
+      assetIds: new Set(),
+    });
+    expect(report.findings.some((f) => f.kind === 'asset')).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { getAsset } from '@/engine/persistence/assetStore';
 import {
   type Autosave,
+  claimWriter,
   clearRecovery,
   createAutosave,
   loadRecovery,
@@ -18,7 +19,7 @@ import type { SceneNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { useDesignStore } from '@/engine/store/useDesignStore';
-import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
+import { reportDiagnostic, useDiagnosticsStore } from '@/engine/store/useDiagnosticsStore';
 import { fontsForProject, useFontStore } from '@/engine/store/useFontStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
@@ -55,6 +56,8 @@ export function FileMenu() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const autosaveRef = useRef<Autosave | null>(null);
+  /** False while another tab owns the recovery snapshot (INC-14). */
+  const writerRef = useRef(true);
 
   /** Snapshot of everything that belongs in a .toke file. */
   const buildBytes = useCallback(async () => {
@@ -89,6 +92,31 @@ export function FileMenu() {
   }, [name]);
 
   // ---- autosave ----------------------------------------------------------
+  // Claimed once per tab, apart from the autosave effect below: that one
+  // re-runs on rename, and dropping the lock there would hand it to another tab.
+  useEffect(
+    () =>
+      claimWriter((writer) => {
+        writerRef.current = writer;
+        if (writer) {
+          // The other tab closed and this one took over: the warning is stale.
+          const { entries, dismiss } = useDiagnosticsStore.getState();
+          for (const entry of entries) {
+            if (entry.error.code === 'AUTOSAVE_OTHER_TAB') dismiss(entry.id);
+          }
+          // Anything edited while waiting has not been written yet.
+          void autosaveRef.current?.flush();
+        } else {
+          reportDiagnostic('autosave', 'warning', {
+            code: 'AUTOSAVE_OTHER_TAB',
+            message: 'toke is open in another tab, so this tab is not autosaving.',
+            hint: 'Save to a file to keep changes made here, or close the other tab.',
+          });
+        }
+      }),
+    [],
+  );
+
   useEffect(() => {
     const autosave = createAutosave({
       produce: async () => ({
@@ -96,6 +124,7 @@ export function FileMenu() {
         savedAt: new Date().toISOString(),
         payload: await buildBytes(),
       }),
+      canWrite: () => writerRef.current,
       onError: (error) => {
         setProblem(error);
         reportDiagnostic('autosave', 'error', error);

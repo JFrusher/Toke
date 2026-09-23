@@ -1,16 +1,20 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { listAssets } from '@/engine/persistence/assetStore';
 import { type Finding, preflight, summarise } from '@/engine/preflight/preflight';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
 
 const KIND_LABEL: Record<Finding['kind'], string> = {
   overflow: 'Overflow',
   unresolved: 'Unresolved',
   empty: 'Empty',
+  font: 'Typeface',
+  asset: 'Missing image',
 };
 
 /**
@@ -27,9 +31,40 @@ export function PreflightReport({ open, onClose }: { open: boolean; onClose: () 
   const setMode = useStudioStore((s) => s.setMode);
   const setCursor = useStudioStore((s) => s.setCursor);
 
+  // Which images actually have bytes, read when the report opens. Until the
+  // read finishes the asset check is skipped rather than guessed.
+  const [assetIds, setAssetIds] = useState<ReadonlySet<string> | undefined>(undefined);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listAssets()
+      .then((assets) => {
+        if (!cancelled) setAssetIds(new Set(assets.map((asset) => asset.id)));
+      })
+      .catch((error: unknown) => {
+        // Not fatal to the rest of the report, but not silent either.
+        reportDiagnostic('pre-flight', 'warning', {
+          code: 'ASSET_STORE_UNAVAILABLE',
+          message: `Could not read the image store: ${error instanceof Error ? error.message : String(error)}`,
+          hint: 'Missing images will not be checked in this pre-flight.',
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const report = useMemo(
-    () => (open ? preflight({ nodes, rows: records as readonly Record<string, unknown>[] }) : null),
-    [open, nodes, records],
+    () =>
+      open
+        ? preflight({
+            nodes,
+            rows: records as readonly Record<string, unknown>[],
+            ...(assetIds === undefined ? {} : { assetIds }),
+          })
+        : null,
+    [open, nodes, records, assetIds],
   );
 
   const summary = report === null ? null : summarise(report);
@@ -68,7 +103,9 @@ export function PreflightReport({ open, onClose }: { open: boolean; onClose: () 
                 <span data-numeric>{report.recordCount}</span> records need attention —{' '}
                 <span data-numeric>{summary.overflow}</span> overflow,{' '}
                 <span data-numeric>{summary.unresolved}</span> unresolved,{' '}
-                <span data-numeric>{summary.empty}</span> empty.
+                <span data-numeric>{summary.empty}</span> empty,{' '}
+                <span data-numeric>{summary.font}</span> typeface,{' '}
+                <span data-numeric>{summary.asset}</span> missing image.
               </>
             )}
           </p>
