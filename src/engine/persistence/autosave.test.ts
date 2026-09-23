@@ -193,6 +193,26 @@ describe('write failures', () => {
     expect(onError.mock.calls[0]?.[0]).toMatchObject({ code: 'AUTOSAVE_FAILED' });
   });
 
+  it('says storage is full when the browser reports a quota error', async () => {
+    // The real thing is a DOMException named QuotaExceededError, whose message
+    // differs per browser. e2e/quota.spec.ts produces a genuine one.
+    const onError = vi.fn();
+    const autosave = createAutosave({
+      produce: async () => {
+        throw new DOMException('quota', 'QuotaExceededError');
+      },
+      delayMs: 10,
+      onError,
+    });
+
+    autosave.schedule();
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({
+      message: 'Could not autosave: browser storage is full.',
+    });
+  });
+
   it('keeps working after a failed write', async () => {
     let fail = true;
     const autosave = createAutosave({

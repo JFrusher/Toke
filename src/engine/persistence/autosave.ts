@@ -54,9 +54,22 @@ function run<T>(
         const transaction = db.transaction(STORE, mode);
         const request = body(transaction.objectStore(STORE));
 
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-        transaction.oncomplete = () => db.close();
+        // Settled on the TRANSACTION, not the request. Chrome checks quota at
+        // commit: the put succeeds, then the transaction aborts with
+        // QuotaExceededError. Resolving on request success reported a full
+        // disk as a saved snapshot (VER-6).
+        transaction.oncomplete = () => {
+          db.close();
+          resolve(request.result);
+        };
+        transaction.onabort = () => {
+          db.close();
+          reject(
+            transaction.error ??
+              request.error ??
+              new DOMException('The snapshot write was aborted.', 'AbortError'),
+          );
+        };
       }),
   );
 }
@@ -182,11 +195,19 @@ export function createAutosave(options: {
     } catch (error) {
       // A quota error must not take the editor down mid-edit, but it must not
       // vanish either — the user needs to know their work is not being saved.
+      // Browsers word the quota message differently; the name is the contract,
+      // and "storage is full" tells the user what to do about it.
+      // Not `instanceof Error`: DOMException is not an Error in every runtime.
+      const full = error instanceof DOMException && error.name === 'QuotaExceededError';
       const message = error instanceof Error ? error.message : String(error);
       options.onError?.(
-        appError('AUTOSAVE_FAILED', `Could not autosave: ${message}`, {
-          hint: 'Save the project to a file — recovery may not be available.',
-        }),
+        appError(
+          'AUTOSAVE_FAILED',
+          full ? 'Could not autosave: browser storage is full.' : `Could not autosave: ${message}`,
+          {
+            hint: 'Save the project to a file — recovery may not be available.',
+          },
+        ),
       );
     }
   }

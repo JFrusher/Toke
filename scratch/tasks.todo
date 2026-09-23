@@ -57,6 +57,34 @@ Two things the investigation turned up that were worth writing down:
 Covered by `e2e/textedit.spec.ts`: entering the editor, the edit reaching the
 node, an undo/redo round trip, and that typing does not fire tool shortcuts.
 
+### DEF-3 · First edit shifted the canvas 40px · DONE · 2026-09-22
+The dirty flag appearing in the header made it wrap to a second line at
+1024–1440px, pushing the canvas down under the pointer mid-gesture — what
+looked like pen misplacement. The design switcher moved to the left sidebar,
+the header is `flex-nowrap`, and the flag reserves its width. Regression test
+in `e2e/shell.spec.ts` at both widths.
+
+### DEF-4 · A change of artboard size left the canvas ignoring the mouse · DONE · 2026-09-23
+The Fabric canvas was rebuilt whenever the artboard size changed, but every
+listener effect had attached to the old one and never re-ran. Opening the
+tent-fold template (85 × 110mm) produced a canvas that could not be clicked,
+dragged or zoomed. Found by VER-1. The canvas is now created once; the
+artboard rectangle is resized in its own effect. `e2e/remount.spec.ts`.
+
+### DEF-5 · Moving or resizing several objects threw them across the artboard · DONE · 2026-09-23
+Members of a Fabric `ActiveSelection` hold coordinates relative to the
+selection. `commitFromFabric` stored them as scene coordinates, and the
+store → Fabric sync wrote scene coordinates back as relative ones. Found by
+VER-3. `sceneTransform` and `placeInSelection` in `StudioCanvas.tsx` convert
+through the selection's matrix in both directions. `e2e/selection.spec.ts`
+covers move and resize.
+
+### DEF-6 · A full disk was reported as a saved snapshot · DONE · 2026-09-23
+IndexedDB writes settled on the request's success. Chrome checks quota at
+commit, after that success, so a QuotaExceededError aborted the transaction
+unnoticed and recovery silently held stale data. Writes now settle on the
+transaction. Found by VER-6; `e2e/quota.spec.ts` produces the genuine error.
+
 ---
 
 ## 2. Blocked on a later phase
@@ -383,12 +411,12 @@ with it.
 Acceptance criteria that were written into the plan and not actually
 exercised. Each needs a test, not an opinion.
 
-### VER-1 · Canvas mount/unmount leak · OPEN · P3.2
-> "Mount/unmount 50 times without leaking listeners or canvases (assert
-> listener count)."
-
-Never run. React StrictMode double-mounts in dev, so a leak here is likely
-already happening unnoticed.
+### VER-1 · Canvas mount/unmount leak · CLOSED
+`e2e/remount.spec.ts` unmounts the whole studio 50 times (by crossing the
+1024px breakpoint) and asserts window and document listener counts, read from
+Chrome's DevTools protocol, and the canvas element count are unchanged. A
+mutation check — one missing `removeEventListener` — fails it at 22 → 122.
+Also found DEF-4.
 
 ### VER-2 · Data grid at 10,000 rows · CLOSED
 > "10,000 rows scroll at 60fps."
@@ -398,24 +426,24 @@ than measuring frame timing — a windowed grid renders a screenful whatever the
 dataset is, and timing assertions flake in CI for reasons unrelated to the
 code.
 
-### VER-3 · Multi-select resize origin · OPEN · P3.5
-> "Multi-select resize scales all members proportionally about the correct
-> origin."
+### VER-3 · Multi-select resize origin · CLOSED
+`e2e/selection.spec.ts` resizes a two-object selection from its corner and
+asserts the top-left member stays put while every size and gap scales by the
+same factor. It failed first: see DEF-5.
 
-Delegated entirely to Fabric's `ActiveSelection`; never asserted.
-
-### VER-4 · Marquee selection · OPEN · P3.5
-Fabric's default drag-select is enabled but untested.
+### VER-4 · Marquee selection · CLOSED
+`e2e/selection.spec.ts`: a marquee around two objects selects both; one over
+empty pasteboard selects nothing.
 
 ### VER-7 · Measurement agreement on a non-bundled font · CLOSED
 Now reachable, because INC-15 made font upload exist. An uploaded TTF
 round-trips through save and reopen with identical measurements, and is
 embedded as a subset in the exported PDF rather than substituted.
 
-### VER-6 · Autosave under a real storage quota · OPEN · P4.4
-`onError` is tested with a thrown error, but a genuine `QuotaExceededError`
-from a large project has never been produced. Worth a test that fills the
-store.
+### VER-6 · Autosave under a real storage quota · CLOSED
+`e2e/quota.spec.ts` shrinks the origin's quota through Chrome's DevTools
+protocol and asserts the diagnostics panel says storage is full. It failed
+first: see DEF-6.
 
 ### VER-5 · Numeric fields during a live drag · CLOSED
 > "Values update live during canvas drag without fighting user input
