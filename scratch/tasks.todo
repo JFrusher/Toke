@@ -213,17 +213,22 @@ one history entry and changing the selection starts a new one. Covered in
 `engine/store/nudge.test.ts`, including that a nudge does not merge into the
 placement before it.
 
-### INC-11 · Assets and fonts are not collected into a save · PARTLY CLOSED
-Assets now travel inside the `.toke` and into the export job; a saved project
-with an image reopens with the image. Fonts still do not: v1 ships one family
-and bundles it, so carrying ~218KB per face in every project file would buy
-nothing. Revisit with custom font upload.
+### INC-11 · Assets and fonts are not collected into a save · CLOSED
+Assets and uploaded fonts both travel inside the `.toke`. Bundled faces stay
+out — a project referencing a font this build ships can always find it, where
+one referencing a user's own file would otherwise open with the wrong typeface
+everywhere.
+
+Fonts are restored before the scene loads, since text measured against a
+substituted face would be wrong until something re-rendered.
 
 
-### INC-13 · Multi-design projects cannot be created or switched · OPEN · P4.2
-The format stores `designs` as an array and round-trips several, but
-`toProject` always writes exactly one and `fromProject` reads only the first.
-No UI to add, rename or switch designs.
+### INC-13 · Multi-design projects cannot be created or switched · CLOSED
+A switcher in the header adds, renames, switches and removes designs. The open
+design is the live canvas; the rest are parked in `useDesignStore` and written
+back into their own slots on save, so saving can no longer lose a design just
+because it was not on screen. The last design cannot be removed — a project
+with none has nothing to print.
 
 ### INC-14 · No BroadcastChannel single-writer lock · OPEN · P4.4
 > "BroadcastChannel single-writer lock, crash-recovery prompt."
@@ -231,10 +236,15 @@ No UI to add, rename or switch designs.
 Recovery works. The lock does not exist: two tabs open on the same project
 both autosave, and the last write wins silently.
 
-### INC-15 · Only the bundled Plex faces load · OPEN · P5.1
-`ensureFontsLoaded` fetches three hardcoded faces from `/fonts`. There is no
-user font upload, no font picker, and `loadFont`'s TTF/OTF path is only
-exercised by the WOFF fixture. The loader supports it; nothing calls it.
+### INC-15 · Only the bundled Plex faces load · CLOSED
+TrueType and OpenType upload, with a family picker that reads the font
+REGISTRY rather than a hardcoded list — so it cannot offer a face the PDF
+renderer is unable to embed.
+
+Fixed a real bug this exposed: `fontsForExport` sent `font.family`, the name
+the file calls itself, rather than `cssFamily`, the name the design references.
+The worker could not find the face, so **any** uploaded font failed at export
+with `PDF_FONT_MISSING`.
 
 ### INC-16 · Bundled fonts are WOFF, not TTF/OTF · DONE · 2026-09-22
 **Fixed.** Switched to @expo-google-fonts, which ships TTF. Verified the
@@ -310,10 +320,16 @@ state before every command, and a coalesced gesture's entry deliberately holds
 the state from before the WHOLE gesture — which no per-command inverse can
 reconstruct. Less code and correct for drags.
 
-### INC-34 · Image crop is fit-mode only, no crop rectangle · KNOWN
-Fit, Fill and Stretch against the frame, with the frame resizable. There is no
-drag-a-crop-box-over-the-image interaction and no pan-within-frame. Adding one
-means a `cropRect` on `ImageNode` and a `.toke` schemaVersion bump.
+### INC-34 · Image crop is fit-mode only, no crop rectangle · CLOSED
+`ImageNode` carries a `crop` rectangle, edited as percentages in the inspector.
+Expressed as fractions of the natural size so a crop survives the picture being
+swapped for a different resolution of the same shot.
+
+`.toke` schemaVersion is 2, with a migration that fills in the full-image crop
+when reading a v1 file — every consumer sees current-format nodes, so nothing
+downstream checks the version.
+
+There is still no drag-a-box-over-the-image gesture; the numbers are typed.
 
 ### INC-35 · Image resize does not lock aspect · CLOSED
 Shift-drag on a corner handle locks the aspect ratio, for every object rather
@@ -384,9 +400,10 @@ Delegated entirely to Fabric's `ActiveSelection`; never asserted.
 ### VER-4 · Marquee selection · OPEN · P3.5
 Fabric's default drag-select is enabled but untested.
 
-### VER-7 · Measurement agreement on a non-bundled font · OPEN · P5.3
-The 0.5pt agreement is proved for three Plex faces. A user-supplied TTF has
-never been checked, and that is the case most likely to diverge.
+### VER-7 · Measurement agreement on a non-bundled font · CLOSED
+Now reachable, because INC-15 made font upload exist. An uploaded TTF
+round-trips through save and reopen with identical measurements, and is
+embedded as a subset in the exported PDF rather than substituted.
 
 ### VER-6 · Autosave under a real storage quota · OPEN · P4.4
 `onError` is tested with a thrown error, but a genuine `QuotaExceededError`

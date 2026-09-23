@@ -1,4 +1,5 @@
-import type { ImageFit, ImageNode } from '@/engine/scene/types';
+import type { CropRect, ImageFit, ImageNode } from '@/engine/scene/types';
+import { FULL_CROP } from '@/engine/scene/types';
 import type { Points } from '@/engine/units/types';
 import { points } from '@/engine/units/types';
 import { appError } from '@/lib/errors';
@@ -125,6 +126,31 @@ export function fitBox(
   const height = matchWidth ? node.width / aspect : node.height;
 
   return { x: (node.width - width) / 2, y: (node.height - height) / 2, width, height };
+}
+
+/**
+ * The aspect ratio of the CROPPED region, which is what fitBox must reason
+ * about.
+ *
+ * Fitting the uncropped aspect and then cropping would letterbox the wrong
+ * axis: a wide photo cropped square must behave like a square.
+ */
+export function croppedAspect(natural: Pixels, crop: CropRect = FULL_CROP): number {
+  const width = natural.width * crop.width;
+  const height = natural.height * crop.height;
+  if (height <= 0 || width <= 0) return 1;
+  return width / height;
+}
+
+/** Clamps a crop to the image and refuses a degenerate one. */
+export function normaliseCrop(crop: CropRect): CropRect {
+  const x = Math.min(Math.max(crop.x, 0), 1);
+  const y = Math.min(Math.max(crop.y, 0), 1);
+  // A zero-size crop would divide by zero downstream and show nothing, which
+  // reads as a broken image rather than as a crop.
+  const width = Math.min(Math.max(crop.width, 0.01), 1 - x);
+  const height = Math.min(Math.max(crop.height, 0.01), 1 - y);
+  return { x, y, width, height };
 }
 
 /** True when the fit mode makes the image overflow its frame and need clipping. */

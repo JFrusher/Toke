@@ -8,7 +8,7 @@ import { type SnapMatch, snap, snapTargets } from '@/engine/canvas/snapping';
 import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
-import { fitBox } from '@/engine/scene/image';
+import { croppedAspect, fitBox } from '@/engine/scene/image';
 import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { MAX_ZOOM, MIN_ZOOM, type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
@@ -254,24 +254,36 @@ function buildFabricObject(
       if (element === undefined) return null;
 
       const image = new fabric.FabricImage(element, props);
-      const aspect = element.naturalWidth / element.naturalHeight;
+      // The cropped aspect, matching the PDF renderer exactly.
+      const aspect = croppedAspect(
+        { width: element.naturalWidth, height: element.naturalHeight },
+        node.crop,
+      );
       const placed = fitBox(node, aspect);
+      const scale = { x: 1 / node.crop.width, y: 1 / node.crop.height };
+      const drawn = {
+        x: placed.x - node.crop.x * placed.width * scale.x,
+        y: placed.y - node.crop.y * placed.height * scale.y,
+        width: placed.width * scale.x,
+        height: placed.height * scale.y,
+      };
+      const cropped = node.crop.width < 1 || node.crop.height < 1;
 
       // Scaled from the shared fitBox, so the canvas and the PDF crop to the
       // same rectangle. Two implementations of 'cover' is how a preview and a
       // print stop agreeing.
       image.set({
-        scaleX: placed.width / element.naturalWidth,
-        scaleY: placed.height / element.naturalHeight,
-        left: node.x + placed.x,
-        top: node.y + placed.y,
+        scaleX: drawn.width / element.naturalWidth,
+        scaleY: drawn.height / element.naturalHeight,
+        left: node.x + drawn.x,
+        top: node.y + drawn.y,
         // Cover overflows its frame by design; the clip keeps it off the
         // neighbouring artwork, matching the PDF clip path.
         clipPath:
-          node.fit === 'cover'
+          node.fit === 'cover' || cropped
             ? new fabric.Rect({
-                left: -placed.x,
-                top: -placed.y,
+                left: -drawn.x,
+                top: -drawn.y,
                 width: node.width,
                 height: node.height,
                 originX: 'left',

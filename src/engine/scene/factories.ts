@@ -1,5 +1,6 @@
 import type {
   AutoFitConfig,
+  CropRect,
   EllipseNode,
   Fill,
   FontWeight,
@@ -16,7 +17,7 @@ import type {
   TextAlign,
   TextNode,
 } from '@/engine/scene/types';
-import { NO_FILL, NO_STROKE } from '@/engine/scene/types';
+import { FULL_CROP, NO_FILL, NO_STROKE } from '@/engine/scene/types';
 import { type Points, points } from '@/engine/units/types';
 
 /**
@@ -131,12 +132,15 @@ export function textNode(
   };
 }
 
-export function imageNode(input: BaseInput & { assetId: string; fit?: ImageFit }): ImageNode {
+export function imageNode(
+  input: BaseInput & { assetId: string; fit?: ImageFit; crop?: CropRect },
+): ImageNode {
   return {
     ...base(input, 'Image'),
     kind: 'image',
     assetId: input.assetId,
     fit: input.fit ?? 'contain',
+    crop: input.crop ?? FULL_CROP,
   };
 }
 
