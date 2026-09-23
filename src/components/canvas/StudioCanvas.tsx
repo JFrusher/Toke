@@ -4,6 +4,8 @@ import * as fabric from 'fabric';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CanvasGuides } from '@/components/canvas/CanvasGuides';
 import { CanvasRulers, RULER_SIZE, useCursorPosition } from '@/components/canvas/CanvasRulers';
+import { PenPreview } from '@/components/canvas/PenPreview';
+import { EMPTY_PATH, type PenPath, penToNode, shouldClose } from '@/engine/canvas/pen';
 import { type SnapMatch, snap, snapTargets } from '@/engine/canvas/snapping';
 import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
@@ -315,6 +317,14 @@ export function StudioCanvas() {
   /** Held space turns a left-drag into a pan, as it does in every design tool. */
   const spaceHeld = useRef(false);
   const [spacePanning, setSpacePanning] = useState(false);
+  /**
+   * The path being drawn with the pen, before it becomes a node.
+   *
+   * Kept out of the scene graph until it is finished: an in-progress path in
+   * `nodes` would push a history entry per click and reach the PDF if the
+   * user exported mid-draw.
+   */
+  const [penDraft, setPenDraft] = useState<PenPath>(EMPTY_PATH);
   /** Held Ctrl suspends snapping. A ref, because it is read inside a Fabric handler. */
   const suspendSnap = useRef(false);
   const [snapMatches, setSnapMatches] = useState<readonly SnapMatch[]>([]);
@@ -758,13 +768,104 @@ export function StudioCanvas() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null) return;
-    canvas.selection = !spacePanning && useCanvasStore.getState().tool === 'select';
+    const current = useCanvasStore.getState().tool;
+    canvas.selection = !spacePanning && current === 'select';
     // skipTargetFind as well as selection: without it a space-drag that starts
     // over an object selects that object instead of panning, so the gesture
     // only works on empty pasteboard — which is where it is least needed.
-    canvas.skipTargetFind = spacePanning;
-    canvas.defaultCursor = spacePanning ? 'grab' : 'default';
+    canvas.skipTargetFind = spacePanning || current === 'pen';
+    canvas.defaultCursor = spacePanning ? 'grab' : current === 'select' ? 'default' : 'crosshair';
   }, [spacePanning]);
+
+  // ---- pen ---------------------------------------------------------------
+  const penRef = useRef<PenPath>(EMPTY_PATH);
+  penRef.current = penDraft;
+
+  /** Turns the draft into a node, or discards it if it is a lone click. */
+  const finishPen = useCallback((closed: boolean) => {
+    const draft = { ...penRef.current, closed };
+    const node = penToNode(draft, makeId('path'));
+    // One addNode for the whole path, so a single undo takes it back.
+    if (node !== null) useCanvasStore.getState().addNode(node);
+    setPenDraft(EMPTY_PATH);
+  }, []);
+
+  const attachPen = useCallback(
+    (canvas: fabric.Canvas) => {
+      let dragging = false;
+
+      function onDown(event: { scenePoint: fabric.Point; e: MouseEvent | TouchEvent }) {
+        // Space held means pan; the pan handler owns this press.
+        if (spaceHeld.current) return;
+        if (event.e instanceof MouseEvent && event.e.button !== 0) return;
+
+        const point = { x: event.scenePoint.x, y: event.scenePoint.y };
+        const zoom = useCanvasStore.getState().zoom;
+
+        if (shouldClose(penRef.current, point, zoom)) {
+          finishPen(true);
+          return;
+        }
+
+        dragging = true;
+        setPenDraft((draft) => ({
+          ...draft,
+          anchors: [...draft.anchors, { x: point.x, y: point.y, handle: null }],
+        }));
+      }
+
+      function onMove(event: { scenePoint: fabric.Point }) {
+        if (!dragging) return;
+        setPenDraft((draft) => {
+          const last = draft.anchors[draft.anchors.length - 1];
+          if (last === undefined) return draft;
+
+          const handle = { x: event.scenePoint.x - last.x, y: event.scenePoint.y - last.y };
+          // A few pixels of wobble on a click is not a drag; without this every
+          // corner the user meant to click comes out as a tiny curve.
+          const pixels = Math.hypot(handle.x, handle.y) * useCanvasStore.getState().zoom;
+          const next = { ...last, handle: pixels < 3 ? null : handle };
+          return { ...draft, anchors: [...draft.anchors.slice(0, -1), next] };
+        });
+      }
+
+      function onUp() {
+        dragging = false;
+      }
+
+      canvas.on('mouse:down', onDown);
+      canvas.on('mouse:move', onMove);
+      canvas.on('mouse:up', onUp);
+      return () => {
+        canvas.off('mouse:down', onDown);
+        canvas.off('mouse:move', onMove);
+        canvas.off('mouse:up', onUp);
+      };
+    },
+    [finishPen],
+  );
+
+  // Enter finishes, Escape abandons. Leaving the tool keeps what was drawn,
+  // since switching to Select mid-path is how people say "done" in most tools.
+  useEffect(() => {
+    if (tool !== 'pen') {
+      if (penRef.current.anchors.length > 0) finishPen(false);
+      return;
+    }
+
+    function onKey(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finishPen(false);
+        useCanvasStore.getState().setTool('select');
+      }
+      if (event.key === 'Escape') setPenDraft(EMPTY_PATH);
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tool, finishPen]);
 
   // ---- placement tools ---------------------------------------------------
   useEffect(() => {
@@ -780,7 +881,12 @@ export function StudioCanvas() {
     canvas.uniformScaling = false;
     canvas.uniScaleKey = 'shiftKey';
 
+    // The pen clicks THROUGH existing objects: an anchor placed over a shape
+    // must add a point, not select the shape.
+    canvas.skipTargetFind = tool === 'pen';
+
     if (tool === 'select') return;
+    if (tool === 'pen') return attachPen(canvas);
 
     function onMouseDown(event: { scenePoint: fabric.Point }) {
       const store = useCanvasStore.getState();
@@ -796,7 +902,7 @@ export function StudioCanvas() {
     return () => {
       canvas.off('mouse:down', onMouseDown);
     };
-  }, [tool]);
+  }, [tool, attachPen]);
 
   return (
     <div
@@ -817,6 +923,7 @@ export function StudioCanvas() {
       >
         <canvas ref={canvasElementRef} />
         <CanvasGuides width={size.width} height={size.height} matches={snapMatches} />
+        <PenPreview draft={penDraft} width={size.width} height={size.height} />
       </div>
     </div>
   );
@@ -860,7 +967,9 @@ function placeNode(tool: Tool, x: ReturnType<typeof points>, y: ReturnType<typeo
       // shows; sizing only the canvas object would leave both wrong.
       return withMeasuredSize(node);
     }
+    // The pen builds its node over several clicks; see the pen effect.
     case 'select':
+    case 'pen':
       return null;
   }
 }

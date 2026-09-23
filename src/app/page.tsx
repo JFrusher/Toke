@@ -28,12 +28,13 @@ const ALIGN_KEYS: Record<string, AlignEdge> = {
   b: 'bottom',
 };
 
-const TOOL_KEYS: Record<string, 'select' | 'text' | 'rect' | 'ellipse' | 'line'> = {
+const TOOL_KEYS: Record<string, 'select' | 'text' | 'rect' | 'ellipse' | 'line' | 'pen'> = {
   v: 'select',
   t: 'text',
   r: 'rect',
   e: 'ellipse',
   l: 'line',
+  p: 'pen',
 };
 
 /**

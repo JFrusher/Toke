@@ -94,12 +94,13 @@ export function AppShell() {
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-panel">
-      <header className="flex shrink-0 flex-wrap items-center gap-3 border-hairline-strong border-b px-3 py-2">
+      {/* nowrap: the header must never change height. A wrap on the first
+          edit dropped the whole canvas 40px under the pointer. */}
+      <header className="flex shrink-0 flex-nowrap items-center gap-3 border-hairline-strong border-b px-3 py-2">
         <h1>
           <Wordmark />
         </h1>
         <FileMenu />
-        <DesignSwitcher />
 
         <div className="ml-auto flex items-center gap-1.5">
           <Button
@@ -165,6 +166,7 @@ export function AppShell() {
               aria-label="Layers"
               className="flex shrink-0 flex-col overflow-auto bg-panel"
             >
+              <DesignSwitcher />
               <LayersPanel />
             </aside>
             <ResizeHandle

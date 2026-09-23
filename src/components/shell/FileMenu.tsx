@@ -217,7 +217,13 @@ export function FileMenu() {
           data-testid="dirty-flag"
           data-dirty={dirty}
           title={dirty ? 'Unsaved changes' : 'Saved'}
-          className={dirty ? 'text-[11px] text-overflow' : 'text-[11px] text-ink-subtle'}
+          // Fixed width: "Saved" and "Unsaved" differ in length, and the
+          // difference was enough to wrap the header on the first edit.
+          className={
+            dirty
+              ? 'w-12 shrink-0 text-[11px] text-overflow'
+              : 'w-12 shrink-0 text-[11px] text-ink-subtle'
+          }
         >
           {dirty ? 'Unsaved' : 'Saved'}
         </span>
