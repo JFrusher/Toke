@@ -9,7 +9,7 @@ import { createWorkerTransport } from '@/engine/db/workerTransport';
 import { DEFAULT_RECORD_SOURCE } from '@/engine/persistence/project';
 import type { AppError } from '@/lib/errors';
 import { appError } from '@/lib/errors';
-import { isErr, isOk, type Result } from '@/lib/result';
+import { isErr, type Result } from '@/lib/result';
 
 /**
  * Owns the connection to the database worker.
@@ -291,5 +291,3 @@ export function resetDbClient(): void {
   client?.close();
   client = null;
 }
-
-export { isOk };

@@ -74,33 +74,42 @@ Three hard rules:
 src/
 ├─ app/
 │  ├─ layout.tsx                  root layout, fonts, theme
-│  └─ page.tsx                    studio shell (client boundary)
+│  ├─ page.tsx                    studio shell (client boundary), global shortcuts
+│  └─ dev/                        measure + theme harnesses; 404 in production
 │
 ├─ components/
-│  ├─ shell/                      AppShell, HeaderBar, ModeSwitcher, StatusBar
-│  ├─ canvas/                     StudioCanvas, CanvasRulers, CanvasToolbar, Guides
-│  ├─ data/                       DataGrid, CsvImportDialog, RecordSourcePanel, SqlConsole
-│  ├─ inspector/                  InspectorPanel, TransformFields, TypographyPanel,
-│  │                              TokenBindingPanel, AutoFitSettings
-│  ├─ preview/                    CycleBar, RecordSearch, PreflightReport
+│  ├─ shell/                      AppShell, FileMenu, DesignSwitcher, DiagnosticsPanel,
+│  │                              TemplateGallery, TutorialPanel, ShortcutReference,
+│  │                              SmallViewport, ResizeHandle, LiveAnnouncer
+│  ├─ canvas/                     StudioCanvas, CanvasRulers, CanvasGuides, CanvasToolbar,
+│  │                              LayersPanel, PenPreview, ImageImport
+│  ├─ data/                       DataGrid, CsvImportDialog, SqlConsole, SqlHighlight
+│  ├─ inspector/                  TransformFields, TypographyPanel, TokenBindingPanel,
+│  │                              ImageFitPanel
+│  ├─ preview/                    CycleBar, PreflightReport
 │  ├─ imposition/                 ImpositionPanel, SheetPreview, ExportDialog
-│  └─ ui/                         retuned Shadcn primitives — see §4.5
+│  ├─ brand/                      Wordmark, Tokey (onboarding only — §4.8)
+│  └─ ui/                         Button, Modal — hand-built primitives, see §4.5
 │
 ├─ engine/                        ← pure logic. No React, no DOM where avoidable.
-│  ├─ units/                      point-based unit system + conversions
-│  ├─ geometry/                   rects, transforms, matrix maths
+│  ├─ units/                      point-based unit system, conversion, parse, format
+│  ├─ geometry/                   rects, matrix maths
+│  ├─ canvas/                     snapping, arrange, rulers, pen geometry
 │  ├─ imposition/                 solver, crop marks, tent fold, pagination
-│  ├─ db/                         db.worker.ts, rpc.ts, schema.ts, csv.ts
+│  ├─ db/                         db.worker.ts, client, protocol, schema, csv, import
 │  ├─ text/                       measure.ts, fontLoader.ts, autoFit.ts
-│  ├─ tokens/                     parser.ts, resolver.ts, formatters.ts
-│  ├─ scene/                      fabric ⇄ SceneNode serialisation
-│  ├─ pdf/                        pdf.worker.ts, renderers/, document.ts
-│  ├─ persistence/                tokeFile.ts, autosave.ts, assetStore.ts
+│  ├─ tokens/                     parser, resolver, formatters, render
+│  ├─ scene/                      SceneNode types, factories, fabric ⇄ scene, image fit
+│  ├─ preflight/                  overflow, token, font and asset findings
+│  ├─ pdf/                        pdf.worker.ts, render, assemble, exportClient
+│  ├─ persistence/                tokeFile, project, autosave, assetStore, fileIo
 │  ├─ history/                    command stack (undo/redo)
-│  └─ store/                      zustand: studio, data, canvas, imposition
+│  ├─ templates/                  starter designs and the tutorial
+│  ├─ theme/                      WCAG contrast audit
+│  └─ store/                      zustand: studio, data, canvas, imposition, shell,
+│                                 design, font, diagnostics
 │
-├─ lib/                           cn(), small shared helpers
-└─ types/                         shared type declarations
+└─ lib/                           cn(), Result, AppError, buildInfo, small DOM helpers
 ```
 
 `engine/` is the testable core. If logic can live there instead of in a component, it lives there.
@@ -269,12 +278,13 @@ Never reuse these four for anything decorative. Never introduce a fifth without 
 - Control height 28px, compact 24px. Input padding 6px/8px.
 - Icons: Lucide at 14px/16px, `stroke-width: 1.5`.
 
-### 4.5 Retuning Shadcn
+### 4.5 Primitives
 
-Shadcn primitives ship as **starting points**, never as-is. Every component added must have its
-height, type scale, radius, border, padding, focus ring and hover/active/disabled states brought
-onto the scale above before it lands. A component that still looks like the docs example has not
-been finished. Focus ring: 2px `--accent`, 1px offset, on every interactive element.
+`components/ui/` is hand-built — no Shadcn or Radix is installed, and dialogs are native
+`<dialog>` (§7). Any primitive added, hand-written or adopted from a library, must have its
+height, type scale, radius, border, padding, focus ring and hover/active/disabled states on the
+scale above before it lands. One that still looks like its library's docs example is not
+finished. Focus ring: 2px `--accent`, 1px offset, on every interactive element.
 
 ### 4.6 Motion
 
@@ -355,7 +365,7 @@ Reject in review, without discussion:
 16. SVG wave/skew/zigzag section dividers.
 17. Testimonial cards with circular avatars and five stars.
 18. Decorative sparklines and area charts where a number or table is clearer.
-19. Stock unstyled Shadcn/Radix — see §4.5.
+19. Stock, unstyled library components (Shadcn, Radix, …) — see §4.5.
 20. Gradient badge pills: "🚀 Announcing v2.0 →".
 
 **Write copy like a print professional.** "Bleed 3mm", "10-up on A4", "Trim 85 × 55mm",
