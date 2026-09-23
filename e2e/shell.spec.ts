@@ -121,3 +121,31 @@ test('arrow keys reach the canvas, not the splitter, when nothing is focused', a
 
   await expect(handle).toHaveAttribute('aria-valuenow', '232');
 });
+
+for (const width of [1024, 1440]) {
+  test(`the header stays one row at ${width}px, before and after the first edit`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await ready(page);
+
+    const headerHeight = async () =>
+      (await page.locator('header').first().boundingBox())?.height ?? 0;
+    const canvasTop = async () => (await page.getByTestId('canvas-viewport').boundingBox())?.y ?? 0;
+
+    const before = { header: await headerHeight(), canvas: await canvasTop() };
+    // One row of 28px controls plus padding; a wrapped header is ~85px.
+    expect(before.header).toBeLessThan(50);
+
+    // The first edit flips "Saved" to "Unsaved". That flip used to wrap the
+    // header and drop the whole canvas 40px under the pointer mid-gesture.
+    const box = await page.getByTestId('canvas-viewport').boundingBox();
+    if (box === null) throw new Error('viewport has no box');
+    await page.getByTestId('tool-rect').click();
+    await page.mouse.click(box.x + 300, box.y + 300);
+    await expect(page.getByTestId('dirty-flag')).toHaveAttribute('data-dirty', 'true');
+
+    expect(await headerHeight()).toBe(before.header);
+    expect(await canvasTop()).toBe(before.canvas);
+  });
+}

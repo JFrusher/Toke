@@ -16,7 +16,7 @@ import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { millimetresToPoints } from '@/engine/units/convert';
 import { millimetres, type Points, points } from '@/engine/units/types';
 
-export type Tool = 'select' | 'text' | 'rect' | 'ellipse' | 'line';
+export type Tool = 'select' | 'text' | 'rect' | 'ellipse' | 'line' | 'pen';
 
 /** The part of canvas state that undo/redo rewinds. Viewport is excluded —
  *  nobody expects Ctrl+Z to change the zoom level. */

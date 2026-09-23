@@ -16,6 +16,7 @@ const TOOLS: readonly { id: Tool; label: string; key: string }[] = [
   { id: 'rect', label: 'Rectangle', key: 'R' },
   { id: 'ellipse', label: 'Ellipse', key: 'E' },
   { id: 'line', label: 'Line', key: 'L' },
+  { id: 'pen', label: 'Pen', key: 'P' },
 ];
 
 const ALIGNMENTS: readonly { edge: AlignEdge; label: string }[] = [
