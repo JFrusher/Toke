@@ -75,6 +75,56 @@ function selectedLeafIds(nodes: readonly SceneNode[], selection: readonly NodeId
 }
 
 /**
+ * A member of a multi-selection keeps its position RELATIVE to the selection:
+ * Fabric's ActiveSelection is a temporary group. The scene graph is absolute,
+ * so both directions convert here, and nowhere else reads `left`/`top` raw.
+ *
+ * Skew is dropped: a rotated member scaled non-uniformly as part of a
+ * selection picks some up, and a node has no skew to carry it.
+ */
+const TRANSFORM_KEYS = [
+  'left',
+  'top',
+  'scaleX',
+  'scaleY',
+  'angle',
+  'skewX',
+  'skewY',
+  'flipX',
+  'flipY',
+] as const;
+
+/** The object's transform in scene space, whether or not it is selected with others. */
+function sceneTransform(object: fabric.FabricObject) {
+  const read = () => ({
+    left: object.left,
+    top: object.top,
+    scaleX: object.scaleX,
+    scaleY: object.scaleY,
+    angle: object.angle,
+  });
+  if (object.group === undefined) return read();
+
+  const saved = Object.fromEntries(TRANSFORM_KEYS.map((key) => [key, object[key]]));
+  // Borrow Fabric's own decomposition, then put the relative values back:
+  // the selection is still live and must not see its member move.
+  fabric.util.applyTransformToObject(object, object.calcTransformMatrix());
+  const absolute = read();
+  object.set(saved);
+  return absolute;
+}
+
+/** After scene-space props were set on a selected member, make them selection-relative. */
+function placeInSelection(object: fabric.FabricObject) {
+  if (object.group === undefined) return;
+  const toGroup = fabric.util.invertTransform(object.group.calcTransformMatrix());
+  fabric.util.applyTransformToObject(
+    object,
+    fabric.util.multiplyTransformMatrices(toGroup, object.calcOwnMatrix()),
+  );
+}
+
+/**
  * Size a text node from engine/text/measure.ts rather than letting Fabric
  * measure it (CLAUDE.md §2.1 rule 3).
  *
@@ -351,13 +401,9 @@ export function StudioCanvas() {
       if (object === undefined) return node;
       const updated = fromFabricObject(
         {
-          left: object.left,
-          top: object.top,
+          ...sceneTransform(object),
           width: object.width,
           height: object.height,
-          scaleX: object.scaleX,
-          scaleY: object.scaleY,
-          angle: object.angle,
           opacity: object.opacity,
           visible: object.visible,
           ...(object instanceof fabric.IText ? { text: object.text } : {}),
@@ -394,8 +440,8 @@ export function StudioCanvas() {
     const artboardRect = new fabric.Rect({
       left: 0,
       top: 0,
-      width: artboard.width,
-      height: artboard.height,
+      width: useCanvasStore.getState().artboard.width,
+      height: useCanvasStore.getState().artboard.height,
       fill: '#ffffff',
       selectable: false,
       evented: false,
@@ -421,14 +467,29 @@ export function StudioCanvas() {
     const observer = new ResizeObserver(resize);
     observer.observe(container);
 
-    useCanvasStore.getState().zoomToFit({ width: host.clientWidth, height: host.clientHeight });
-
     return () => {
       observer.disconnect();
       objectsRef.current.clear();
       void canvas.dispose();
       canvasRef.current = null;
     };
+    // Created ONCE. It used to be rebuilt on a change of artboard size, and
+    // every listener effect below had already attached to the old canvas —
+    // opening the tent-fold template left a canvas that ignored the mouse.
+  }, []);
+
+  // ---- artboard size ---------------------------------------------------------
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    const rect = artboardRef.current;
+    if (canvas === null || container === null || rect === null) return;
+
+    rect.set({ width: artboard.width, height: artboard.height });
+    useCanvasStore
+      .getState()
+      .zoomToFit({ width: container.clientWidth, height: container.clientHeight });
+    canvas.requestRenderAll();
   }, [artboard.width, artboard.height]);
 
   // ---- fonts -------------------------------------------------------------
@@ -504,6 +565,7 @@ export function StudioCanvas() {
         // effect re-runs and resizes every text box.
         const box = fontsReady ? measuredTextBox(node) : null;
         if (box !== null) existing.set({ width: box.width, height: box.height });
+        placeInSelection(existing);
         existing.setCoords();
       }
     }
