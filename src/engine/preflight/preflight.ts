@@ -17,7 +17,7 @@ import { isErr } from '@/lib/result';
  * accepts it should not be stopped from printing.
  */
 
-export type FindingKind = 'overflow' | 'unresolved' | 'empty';
+export type FindingKind = 'overflow' | 'unresolved' | 'empty' | 'font' | 'asset';
 
 export type Finding = {
   readonly kind: FindingKind;
@@ -43,11 +43,70 @@ function textNodes(nodes: readonly SceneNode[]): TextNode[] {
   return found;
 }
 
+/**
+ * Structural checks that do not depend on the record: every node either has
+ * what it needs to print or it does not, whichever guest is on the card.
+ */
+function structuralFindings(
+  nodes: readonly SceneNode[],
+  assetIds: ReadonlySet<string> | undefined,
+): Finding[] {
+  const findings: Finding[] = [];
+
+  for (const node of walk(nodes)) {
+    if (node.kind === 'text') {
+      const font = getFont(node.fontFamily, node.fontWeight, node.italic);
+      const wanted = `${node.fontFamily} ${node.fontWeight}${node.italic ? ' italic' : ''}`;
+
+      if (font === null) {
+        findings.push({
+          kind: 'font',
+          nodeId: node.id,
+          nodeName: node.name,
+          recordIndex: -1,
+          detail: `${wanted} is not loaded. Export will refuse rather than substitute a face.`,
+        });
+        continue;
+      }
+
+      // getFont falls back to the nearest weight so canvas and PDF agree, which
+      // makes a substitution invisible: the proof and the print match each
+      // other, and both are lighter or heavier than the design asked for.
+      if (font.weight !== node.fontWeight || font.italic !== node.italic) {
+        const got = `${font.weight}${font.italic ? ' italic' : ''}`;
+        findings.push({
+          kind: 'font',
+          nodeId: node.id,
+          nodeName: node.name,
+          recordIndex: -1,
+          detail: `${wanted} is not loaded; printing in ${node.fontFamily} ${got} instead.`,
+        });
+      }
+    }
+
+    // Only checked when the caller knows what exists. No set means "unknown",
+    // and reporting every image as missing would be a false alarm on every run.
+    if (node.kind === 'image' && assetIds !== undefined && !assetIds.has(node.assetId)) {
+      findings.push({
+        kind: 'asset',
+        nodeId: node.id,
+        nodeName: node.name,
+        recordIndex: -1,
+        detail: 'The image file is not in this project. Export will stop at this object.',
+      });
+    }
+  }
+
+  return findings;
+}
+
 export function preflight(input: {
   nodes: readonly SceneNode[];
   rows: readonly Record<string, unknown>[];
+  /** Asset ids present in the store. Omit when unknown to skip the check. */
+  assetIds?: ReadonlySet<string>;
 }): PreflightReport {
-  const findings: Finding[] = [];
+  const findings: Finding[] = structuralFindings(input.nodes, input.assetIds);
   // hasTokenSyntax, not isTokenised: a malformed token does not parse, so
   // isTokenised reports false and the node would be skipped — hiding the
   // bindings most likely to be broken.
@@ -132,6 +191,8 @@ export type PreflightSummary = {
   readonly overflow: number;
   readonly unresolved: number;
   readonly empty: number;
+  readonly font: number;
+  readonly asset: number;
   readonly affectedRecords: number;
 };
 
@@ -140,13 +201,17 @@ export function summarise(report: PreflightReport): PreflightSummary {
   let overflow = 0;
   let unresolved = 0;
   let empty = 0;
+  let font = 0;
+  let asset = 0;
 
   for (const finding of report.findings) {
     if (finding.recordIndex >= 0) records.add(finding.recordIndex);
     if (finding.kind === 'overflow') overflow += 1;
     if (finding.kind === 'unresolved') unresolved += 1;
     if (finding.kind === 'empty') empty += 1;
+    if (finding.kind === 'font') font += 1;
+    if (finding.kind === 'asset') asset += 1;
   }
 
-  return { overflow, unresolved, empty, affectedRecords: records.size };
+  return { overflow, unresolved, empty, font, asset, affectedRecords: records.size };
 }

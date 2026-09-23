@@ -155,3 +155,18 @@ test('a corrupt file is refused with an explanation', async ({ page }) => {
   // The editor is still usable.
   await expect(page.getByTestId('canvas-viewport')).toBeVisible();
 });
+
+test('INC-14: a second tab does not autosave over the first', async ({ page, context }) => {
+  await ready(page);
+
+  // Same browser context, same origin: the second tab queues for the lock.
+  const second = await context.newPage();
+  await ready(second);
+
+  await second.getByTestId('open-diagnostics').click();
+  await expect(second.getByTestId('diagnostics-entry')).toContainText('open in another tab');
+
+  // Closing the writer hands autosave to the waiting tab and clears the warning.
+  await page.close();
+  await expect(second.getByTestId('diagnostics-entry')).toHaveCount(0);
+});
