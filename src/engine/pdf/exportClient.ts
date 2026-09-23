@@ -68,6 +68,8 @@ export function startExport(
   worker: Worker,
   job: Omit<ExportJob, 'fonts'> & { fonts?: ExportJob['fonts'] },
   onProgress?: (fraction: number) => void,
+  /** 'proof' renders one record at trim size with no imposition or marks. */
+  op: 'export' | 'proof' = 'export',
 ): ExportHandle {
   const payload: ExportJob = { ...job, fonts: job.fonts ?? fontsForExport() };
 
@@ -110,7 +112,7 @@ export function startExport(
     },
   );
 
-  const request: ExportRequest = { op: 'export', job: payload };
+  const request: ExportRequest = { op, job: payload };
   worker.postMessage(request);
 
   return {

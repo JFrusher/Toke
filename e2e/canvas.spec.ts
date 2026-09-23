@@ -57,7 +57,7 @@ test('selecting a layer populates the numeric fields', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
 
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const width = page.getByTestId('field-w');
   await expect(width).toBeEnabled();
@@ -68,7 +68,7 @@ test('selecting a layer populates the numeric fields', async ({ page }) => {
 test('editing a numeric field moves the object', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const x = page.getByTestId('field-x');
   await x.click();
@@ -81,7 +81,7 @@ test('editing a numeric field moves the object', async ({ page }) => {
 test('a unit suffix is accepted in a numeric field', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const width = page.getByTestId('field-w');
   await width.click();
@@ -118,7 +118,7 @@ test('Ctrl+Z undoes from the keyboard', async ({ page }) => {
 test('Delete removes the selection', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   await page.keyboard.press('Delete');
   await expect(page.getByRole('treeitem')).toHaveCount(0);
@@ -127,13 +127,13 @@ test('Delete removes the selection', async ({ page }) => {
 test('arrow keys nudge the selection', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const x = page.getByTestId('field-x');
   const before = Number(await x.inputValue());
 
   await page.getByTestId('canvas-viewport').click({ position: { x: 4, y: 4 } });
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
   await page.keyboard.press('ArrowRight');
 
   // 1pt right = 0.35mm.
@@ -143,7 +143,7 @@ test('arrow keys nudge the selection', async ({ page }) => {
 test('a tool shortcut does not fire while typing in a field', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   // "r" is the rectangle shortcut. Typing it into a numeric field must not
   // switch tools.
@@ -165,10 +165,11 @@ test('grouping keeps both objects on the canvas — DEF-1 regression', async ({ 
   await expect(viewport).toHaveAttribute('data-fabric-objects', '2');
 
   const items = page.getByRole('treeitem');
-  await items.nth(0).getByRole('button').click();
+  await items.nth(0).getByRole('button').first().click();
   await items
     .nth(1)
     .getByRole('button')
+    .first()
     .click({ modifiers: ['Shift'] });
   await page.getByTestId('group').click();
 
@@ -197,10 +198,11 @@ test('grouping two objects nests them in the tree', async ({ page }) => {
   await place(page, 'ellipse', { x: 40, y: 20 });
 
   const items = page.getByRole('treeitem');
-  await items.nth(0).getByRole('button').click();
+  await items.nth(0).getByRole('button').first().click();
   await items
     .nth(1)
     .getByRole('button')
+    .first()
     .click({ modifiers: ['Shift'] });
 
   await page.getByTestId('group').click();
@@ -213,7 +215,7 @@ test('grouping two objects nests them in the tree', async ({ page }) => {
 test('zoom controls change the level without moving geometry', async ({ page }) => {
   await ready(page);
   await place(page, 'rect');
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   const width = page.getByTestId('field-w');
   const before = await width.inputValue();

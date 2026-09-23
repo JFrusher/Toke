@@ -33,7 +33,7 @@ async function bindUnknownColumn(page: Page) {
   const box = await page.getByTestId('canvas-viewport').boundingBox();
   if (box === null) throw new Error('viewport has no box');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await page.getByRole('treeitem').getByRole('button').click();
+  await page.getByRole('treeitem').getByRole('button').first().click();
 
   await page.getByTestId('binding-text').fill('{{ nope }}');
   await page.getByTestId('binding-text').blur();
