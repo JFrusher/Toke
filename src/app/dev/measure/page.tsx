@@ -75,6 +75,9 @@ export default function MeasureAgreement() {
         setFailure('No 2D context available.');
         return;
       }
+      // What the studio canvas uses. Without it Chrome on Linux measures
+      // hinted advances and disagrees with fontkit by up to 5pt at 24px.
+      ctx.textRendering = 'geometricPrecision';
 
       const faces = [
         { weight: 400 as const, italic: false },
@@ -143,6 +146,7 @@ export default function MeasureAgreement() {
 
   const worst = rows.reduce((max, row) => Math.max(max, row.delta), 0);
   const failures = rows.filter((row) => row.delta > TOLERANCE);
+  const worstRow = rows.find((row) => row.delta === worst);
 
   return (
     <main style={{ padding: 24, maxWidth: 900 }}>
@@ -150,7 +154,7 @@ export default function MeasureAgreement() {
         Canvas ⇄ fontkit measurement agreement
       </h1>
       <p style={{ color: 'var(--ink-muted)', margin: '0 0 16px', fontSize: 12 }}>
-        {rows.length} comparisons · 20 strings × 5 sizes × 4 faces. Tolerance {TOLERANCE}pt.
+        {rows.length} comparisons · 20 strings × 5 sizes × 3 faces. Tolerance {TOLERANCE}pt.
       </p>
 
       <p
@@ -170,7 +174,7 @@ export default function MeasureAgreement() {
       >
         {failures.length === 0
           ? `All ${rows.length} agree. Worst delta ${worst.toFixed(4)}pt.`
-          : `${failures.length} of ${rows.length} exceed ${TOLERANCE}pt. Worst ${worst.toFixed(4)}pt.`}
+          : `${failures.length} of ${rows.length} exceed ${TOLERANCE}pt. Worst ${worst.toFixed(4)}pt${worstRow === undefined ? '' : ` ("${worstRow.text}" ${worstRow.weight}${worstRow.italic ? ' italic' : ''} ${worstRow.size}px: browser ${worstRow.browser.toFixed(2)}, fontkit ${worstRow.fontkit.toFixed(2)})`}.`}
       </p>
 
       <table

@@ -390,13 +390,6 @@ Pre-flight compares the face each text node asks for with the face `getFont`
 returns and reports a substitution ("IBM Plex Sans 500 is not loaded;
 printing in 400 instead") before export, not after the cards are printed.
 
-### INC-32 · The e2e suite is contention-sensitive · KNOWN · P9.5
-117 tests, two workers, each booting a SQLite WASM worker against one
-Turbopack dev server. Timeouts were raised to 30s per assertion and 90s per
-test to match the real work; a failure under load is still possible and CI
-runs one worker with two retries. Not masked with blanket retries locally,
-since that would hide genuine flakes.
-
 ### INC-20 · Token errors do not reach a diagnostics surface · CLOSED by P9.2
 Resolution errors and auto-fit overflow now report to the diagnostics panel
 with the offending objectId, which makes each finding click-to-focus. The
@@ -462,73 +455,61 @@ matches what the drag showed and that a whole drag is still one undo.
 
 ## 5. Environment and infrastructure
 
-### ENV-1 · CI has never been observed green · OPEN
-The remote exists and `main`, `staging` and both tags are pushed, so the
-blocking half of this is gone. `.github/workflows/ci.yml` is valid YAML with
-2 jobs and 17 steps, but validity is not the same as passing and no run has
-been watched.
+### ENV-1 · CI has never been observed green · CLOSED
+It had not: all 18 runs to 2026-09-23 failed, every one on the same two
+tests. `e2e/measure.spec.ts` found 215 of 300 strings off by up to 5.4pt on
+Linux, where Chrome measures canvas text with FreeType-hinted advances. The
+fix (`textRendering: geometricPrecision` on the harness and the studio
+canvas) went green on run 35852798867, both jobs. GitHub now warns that the
+v4 actions target Node 20; they run on Node 24 regardless.
 
-- Needed: confirm the first run is green and fix whatever it finds.
-- Until then every "all gates pass" claim rests on local runs only.
-
-### ENV-2 · Vercel CLI not installed · OPEN
+### ENV-2 · Vercel CLI not installed · YOURS
 `npm i -g vercel` then `vercel login && vercel link`. README.md and
-DEVELOPMENT.md both document `npm run env:pull`, which cannot work yet.
+DEVELOPMENT.md both document `npm run env:pull`, which cannot work until then.
 
-### ENV-3 · MCP servers unavailable · OPEN
+### ENV-3 · MCP servers unavailable · YOURS
 - `vercel` and `supabase` need OAuth, which cannot run in a non-interactive
   session — authorise via claude.ai connector settings or `/mcp`.
 - `github` fails with "Authorization header is badly formatted" — a
-  connection fault, not a missing capability.
+  connection fault in its configured token, not a missing capability.
 
-### ENV-4 · Git identity may misattribute commits · OPEN · low
-Commits are authored as `jacob.frusher@cil-uk.co.uk`, which differs from the
-account email on this session. If GitHub uses the other address the history
-will not attribute. Cheap to fix now, annoying later.
+### ENV-4 · Git identity may misattribute commits · YOURS
+Commits are authored as `jacob.frusher@cil-uk.co.uk`; the account email here
+is `jacob@frusher.co.uk`. Which one this repository should carry is your
+call, so it was left as is. If GitHub does not list the work address on your
+account, either add it there or run
+`git config user.email jacob@frusher.co.uk` in this repository.
 
-### ENV-5 · Branch protection not configured · OPEN
-DEVELOPMENT.md §5.6 specifies protecting `main` and `staging`. Until set, the
+### ENV-5 · Branch protection not configured · YOURS
+DEVELOPMENT.md §5.6 specifies protecting `main` and `staging`, with the CI
+checks required. Also set GitHub's default branch to `main`. Until then the
 branching model is a convention rather than a rule.
-
 
 ---
 
 ## 6. Scope and documentation drift
 
-### DOC-1 · `/dev/theme` ships to production · OPEN · low
-The design-system reference page is a real route in the production bundle.
-Either gate it behind `NEXT_PUBLIC_VERCEL_ENV !== 'production'` or accept it
-deliberately and say so in CLAUDE.md.
+### DOC-1 · `/dev/theme` ships to production · CLOSED
+`src/app/dev/layout.tsx` returns a 404 for every /dev page when
+`NEXT_PUBLIC_VERCEL_ENV` is production. Local and preview keep them; the e2e
+suite runs against the dev server, so /dev/measure stays testable.
 
-### DOC-2 · CLAUDE.md §2.2 directory map is aspirational · OPEN
-Less wrong than it was: `AppShell`, `CycleBar`, `SqlConsole` and the whole
-`components/preview/` and `components/imposition/` trees now exist.
+### DOC-2 · CLAUDE.md §2.2 directory map is aspirational · CLOSED
+Rewritten from the tree as it stands. Every entry exists; `types/`,
+`RecordSourcePanel` and `InspectorPanel` are gone from it because they never
+did.
 
-Still listed and still absent: `CanvasRulers`, `Guides` (both INC-1/INC-2),
-`RecordSourcePanel`, `InspectorPanel`, `TypographyPanel`. The map also omits
-components that do exist — `ImageImport`, `TutorialPanel`, `DiagnosticsPanel`,
-`ResizeHandle`, `components/brand/`.
+### DOC-3 · `components/ui/` is not "retuned Shadcn" · CLOSED
+§4.5 is now "Primitives": hand-built, no component library installed, and the
+same finishing bar for anything adopted later. §4.9 item 19 reworded to match.
 
-Fine as a target, misleading as a map — mark which parts are built.
+### DOC-4 · `fixtures/` images are unreferenced masters · CLOSED
+Dropped. Nothing referenced them, the four mascot PNGs were byte-identical to
+`public/brand/`, and the logo and favicon were superseded by the SVG mark.
+The originals remain in history at `f48735b`.
 
-### DOC-3 · `components/ui/` is not "retuned Shadcn" · OPEN · low
-CLAUDE.md §4.5 describes retuning Shadcn primitives. No Shadcn is installed:
-`Button` and `Modal` are hand-written, and the dialog uses native `<dialog>`.
-That was a deliberate call recorded in §7, but §4.5 still reads as though a
-component library is in use.
-
-### DOC-4 · `fixtures/` images are unreferenced masters · OPEN · low
-Ten images committed in `f48735b`. Six are now the brand artwork, copied into
-`public/brand/` and served from there; the wordmark and favicon were redrawn
-as SVG rather than used directly. Nothing imports `fixtures/` itself.
-
-Decide: keep as the source masters the served copies derive from — and say so
-in a short note — or drop them, since they are only recoverable from history
-afterwards.
-
-### DOC-5 · `useDataStore` re-exports `isOk` · OPEN · trivial
-A leftover convenience export from a store module. Import from `@/lib/result`
-and remove.
+### DOC-5 · `useDataStore` re-exports `isOk` · CLOSED
+Removed; nothing imported it from there.
 
 ---
 
@@ -567,6 +548,13 @@ declined on the merits — they are choices, not debt.
   property of this project.
 
 ### Library and platform choices
+
+- **INC-32 · The e2e suite is contention-sensitive.** ~200 tests, two local
+  workers, each booting a SQLite WASM worker against one Turbopack dev
+  server. Timeouts match the real work (30s per assertion, 90s per test) and
+  CI runs one worker with two retries. Locally there are no blanket retries,
+  since they would hide genuine flakes: rerun a failure single-worker before
+  investigating it.
 
 - **`pdf-lib` is unmaintained** (1.17.1, ~4 years old). Deliberate: used as a
   low-level writer under our own renderer. CLAUDE.md §7.

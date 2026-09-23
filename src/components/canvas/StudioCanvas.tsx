@@ -282,6 +282,10 @@ function buildFabricObject(
       const shown = textPresentation(node, mode, row);
       const text = new fabric.IText(shown?.text ?? node.text, {
         ...props,
+        // Uncached, so the glyphs are drawn on the main context, which is the
+        // one carrying geometricPrecision (see resize()). A cache canvas is
+        // created per object and would draw with hinted advances on Linux.
+        objectCaching: false,
         ...(shown === null ? {} : { fontSize: shown.fontSize }),
       });
       const box = fontsReady ? measuredTextBox(node) : null;
@@ -457,6 +461,11 @@ export function StudioCanvas() {
     const host = container;
     function resize() {
       canvas.setDimensions({ width: host.clientWidth, height: host.clientHeight });
+      // Resizing a canvas resets its context state, so this is reapplied on
+      // every resize. Without it, Chrome on Linux uses FreeType-hinted glyph
+      // advances: up to 1.6% off fontkit's, so text drawn on screen stops
+      // matching the width auto-fit measured and the PDF prints (P5.3).
+      canvas.getContext().textRendering = 'geometricPrecision';
       // Mirrored into state so the rulers span exactly the drawing area; they
       // sit outside it and cannot read the Fabric canvas themselves.
       setSize({ width: host.clientWidth, height: host.clientHeight });
