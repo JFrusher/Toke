@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import type { ColumnMapping, InferredType } from '@/engine/db/csv';
 import { parseCsv, proposeMapping } from '@/engine/db/csv';
 import type { ImportMode } from '@/engine/db/import';
 import { useDataStore } from '@/engine/store/useDataStore';
@@ -26,7 +27,38 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
   const parsed = text === null ? null : parseCsv(text);
   const csv = parsed !== null && isOk(parsed) ? parsed.value : null;
   const parseError = parsed !== null && isErr(parsed) ? parsed.error : null;
-  const mapping = csv === null ? [] : proposeMapping(csv.columns, columns);
+  /**
+   * The user's corrections, keyed by source column.
+   *
+   * Overlaid on the proposal rather than replacing it, so a fresh file still
+   * gets a sensible starting point and only the columns actually touched are
+   * remembered.
+   */
+  const [overrides, setOverrides] = useState<Readonly<Record<string, Partial<ColumnMapping>>>>({});
+
+  const proposed = csv === null ? [] : proposeMapping(csv.columns, columns);
+  const mapping: readonly ColumnMapping[] = proposed.map((column) => ({
+    ...column,
+    ...overrides[column.source],
+  }));
+
+  function retarget(source: string, value: string) {
+    // 'create' and 'ignore' are actions; anything else is an existing column.
+    const patch: Partial<ColumnMapping> =
+      value === 'create'
+        ? // The new column takes the source name. A null target here would be
+          // filtered out by importCsv as unmapped, so the column would be
+          // silently dropped rather than created.
+          { action: 'create', target: source }
+        : value === 'ignore'
+          ? { action: 'ignore', target: null }
+          : { action: 'map', target: value };
+    setOverrides((current) => ({ ...current, [source]: { ...current[source], ...patch } }));
+  }
+
+  function retype(source: string, type: InferredType) {
+    setOverrides((current) => ({ ...current, [source]: { ...current[source], type } }));
+  }
 
   // Reported from an effect, not from the render that derives it: a store
   // write during render is a React violation, and keying on the message
@@ -42,12 +74,16 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
     setFilename('');
     setProblem(null);
     setBusy(false);
+    setOverrides({});
   }
 
   async function onFile(file: File | undefined) {
     if (file === undefined) return;
     setProblem(null);
     setFilename(file.name);
+    // A new file gets a fresh proposal; corrections made against the previous
+    // one would be applied to columns that may not exist.
+    setOverrides({});
     setText(await file.text());
   }
 
@@ -56,7 +92,7 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
     setBusy(true);
 
     try {
-      const result = await runImport(text, mode);
+      const result = await runImport(text, mode, mapping);
       if (isErr(result)) {
         setProblem(result.error.message);
         reportDiagnostic('import', 'error', result.error);
@@ -134,19 +170,42 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
                         className="border-hairline border-b px-2 py-1 text-left font-medium"
                       >
                         <span className="block text-ink">{column.source}</span>
-                        <span
-                          className={
-                            column.action === 'ignore'
-                              ? 'block text-ink-subtle'
-                              : 'block text-ink-muted'
-                          }
+
+                        {/* INC-7: editable, not just displayed. A user whose
+                            column was matched wrongly previously had no
+                            recourse but to edit the file. */}
+                        <select
+                          value={column.action === 'map' ? (column.target ?? '') : column.action}
+                          onChange={(event) => retarget(column.source, event.target.value)}
+                          aria-label={`Target for ${column.source}`}
+                          data-testid={`map-target-${column.source}`}
+                          className="mt-0.5 block w-full rounded-[2px] border border-border-control bg-panel-raised px-1 py-0.5 text-[11px] text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
                         >
-                          {column.action === 'ignore'
-                            ? 'ignored'
-                            : column.action === 'create'
-                              ? `new · ${column.type}`
-                              : `${column.target} · ${column.type}`}
-                        </span>
+                          <option value="create">New column</option>
+                          <option value="ignore">Ignore</option>
+                          {columns.map((existing) => (
+                            <option key={existing.name} value={existing.name}>
+                              {existing.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={column.type}
+                          onChange={(event) =>
+                            retype(column.source, event.target.value as InferredType)
+                          }
+                          disabled={column.action === 'ignore'}
+                          aria-label={`Type for ${column.source}`}
+                          data-testid={`map-type-${column.source}`}
+                          className="mt-0.5 block w-full rounded-[2px] border border-border-control bg-panel-raised px-1 py-0.5 text-[11px] text-ink disabled:text-ink-disabled focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+                        >
+                          {(['text', 'integer', 'real', 'boolean'] as const).map((type) => (
+                            <option key={type} value={type}>
+                              {type}
+                            </option>
+                          ))}
+                        </select>
                       </th>
                     ))}
                   </tr>

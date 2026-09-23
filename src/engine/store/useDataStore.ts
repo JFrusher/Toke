@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createDbClient, type DbClient } from '@/engine/db/client';
+import type { ColumnMapping } from '@/engine/db/csv';
 import type { ImportMode, ImportPlan, ImportReport } from '@/engine/db/import';
 import type { QueryResult, Row, SqlValue } from '@/engine/db/protocol';
 import { assertReadOnly, type ColumnSchema, columnSchemaForRows } from '@/engine/db/recordSource';
@@ -47,7 +48,17 @@ type DataState = {
 
   open: () => Promise<void>;
   refresh: () => Promise<void>;
-  runImport: (csvText: string, mode: ImportMode) => Promise<Result<ImportReport>>;
+  /**
+   * Imports a CSV, optionally with a mapping the user has edited.
+   *
+   * Without `mappings` the proposal is used as-is, which is what the tests and
+   * the template loader want. With them, the user's corrections win.
+   */
+  runImport: (
+    csvText: string,
+    mode: ImportMode,
+    mappings?: readonly ColumnMapping[],
+  ) => Promise<Result<ImportReport>>;
   updateCell: (id: number, column: string, value: SqlValue) => Promise<void>;
   addRow: () => Promise<void>;
   deleteRow: (id: number) => Promise<void>;
@@ -168,7 +179,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     });
   },
 
-  async runImport(csvText, mode) {
+  async runImport(csvText, mode, mappings) {
     const db = ensureClient();
     const table = get().table;
 
@@ -189,7 +200,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     const plan: ImportPlan = {
       table,
       mode,
-      mappings: proposeMapping(parsed.value.columns, toTableColumns(info.value.rows)),
+      mappings: mappings ?? proposeMapping(parsed.value.columns, toTableColumns(info.value.rows)),
     };
 
     const report = await db.importCsv(parsed.value, plan);
