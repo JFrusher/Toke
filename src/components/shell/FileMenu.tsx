@@ -13,7 +13,7 @@ import {
   needsRecovery,
 } from '@/engine/persistence/autosave';
 import { downloadProject, projectNameFrom, readProjectFile } from '@/engine/persistence/fileIo';
-import { DEFAULT_RECORD_SOURCE, fromProject, toProject } from '@/engine/persistence/project';
+import { fromProject, toProject } from '@/engine/persistence/project';
 import { packProject, unpackProject } from '@/engine/persistence/tokeFile';
 import type { SceneNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
@@ -75,7 +75,7 @@ export function FileMenu() {
       otherDesigns: designs.others,
       nodes: canvas.nodes,
       artboard: { width: canvas.artboard.width, height: canvas.artboard.height },
-      recordSource: DEFAULT_RECORD_SOURCE,
+      recordSource: data.recordSource,
       database: await data.exportDatabase(),
       // Assets travel inside the file. A .toke that references an image only
       // by hash opens on another machine with a hole where the logo was.
@@ -199,6 +199,8 @@ export function FileMenu() {
       height: points(applied.artboard.height),
     });
     await useDataStore.getState().loadDatabase(applied.database);
+    // After the database: the query runs against the tables it just loaded.
+    await useDataStore.getState().setRecordSource(applied.recordSource);
 
     setName(applied.name === '' ? fallbackName : applied.name);
     setProblem(null);
