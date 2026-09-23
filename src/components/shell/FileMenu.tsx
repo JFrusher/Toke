@@ -17,6 +17,7 @@ import { packProject, unpackProject } from '@/engine/persistence/tokeFile';
 import type { SceneNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { useDesignStore } from '@/engine/store/useDesignStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { fontsForProject, useFontStore } from '@/engine/store/useFontStore';
 import { points } from '@/engine/units/types';
@@ -60,8 +61,15 @@ export function FileMenu() {
     const canvas = useCanvasStore.getState();
     const data = useDataStore.getState();
 
+    const designs = useDesignStore.getState();
+
     const project = toProject({
       name,
+      // Identity and the parked designs, so saving cannot lose a design just
+      // because it is not the one on screen.
+      designId: designs.designId,
+      designName: designs.designName,
+      otherDesigns: designs.others,
       nodes: canvas.nodes,
       artboard: { width: canvas.artboard.width, height: canvas.artboard.height },
       recordSource: DEFAULT_RECORD_SOURCE,
@@ -149,6 +157,12 @@ export function FileMenu() {
     await useFontStore.getState().loadFonts(project.value.fonts);
 
     const applied = fromProject(project.value);
+    useDesignStore.getState().setDesigns({
+      designId: applied.designId,
+      designName: applied.designName,
+      others: applied.otherDesigns,
+    });
+
     useCanvasStore.getState().loadScene(applied.nodes, {
       x: 0,
       y: 0,
