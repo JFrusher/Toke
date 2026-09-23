@@ -17,7 +17,9 @@ import { packProject, unpackProject } from '@/engine/persistence/tokeFile';
 import type { SceneNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
+import { useDesignStore } from '@/engine/store/useDesignStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
+import { fontsForProject, useFontStore } from '@/engine/store/useFontStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
 import { isErr } from '@/lib/result';
@@ -59,8 +61,15 @@ export function FileMenu() {
     const canvas = useCanvasStore.getState();
     const data = useDataStore.getState();
 
+    const designs = useDesignStore.getState();
+
     const project = toProject({
       name,
+      // Identity and the parked designs, so saving cannot lose a design just
+      // because it is not the one on screen.
+      designId: designs.designId,
+      designName: designs.designName,
+      otherDesigns: designs.others,
       nodes: canvas.nodes,
       artboard: { width: canvas.artboard.width, height: canvas.artboard.height },
       recordSource: DEFAULT_RECORD_SOURCE,
@@ -68,10 +77,10 @@ export function FileMenu() {
       // Assets travel inside the file. A .toke that references an image only
       // by hash opens on another machine with a hole where the logo was.
       assets: await assetsForProject(canvas.nodes),
-      // Fonts do not: v1 ships one family and bundles it, so carrying ~218KB
-      // per face in every project file would buy nothing. Revisit with custom
-      // font upload.
-      fonts: [],
+      // Uploaded faces travel; bundled ones do not. A project referencing a
+      // font this build ships can find it, but one referencing a user's own
+      // file would open with the wrong typeface everywhere.
+      fonts: fontsForProject().map((font) => ({ family: font.family, bytes: font.bytes })),
     });
 
     const packed = await packProject(project);
@@ -143,7 +152,17 @@ export function FileMenu() {
       return;
     }
 
+    // Fonts first: the scene is measured as it loads, and a text node laid out
+    // against a substituted face would be wrong until something re-rendered.
+    await useFontStore.getState().loadFonts(project.value.fonts);
+
     const applied = fromProject(project.value);
+    useDesignStore.getState().setDesigns({
+      designId: applied.designId,
+      designName: applied.designName,
+      others: applied.otherDesigns,
+    });
+
     useCanvasStore.getState().loadScene(applied.nodes, {
       x: 0,
       y: 0,

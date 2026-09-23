@@ -2,7 +2,14 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest';
-import { fitBox, initialFrame, naturalSize, needsClip } from '@/engine/scene/image';
+import {
+  croppedAspect,
+  fitBox,
+  initialFrame,
+  naturalSize,
+  needsClip,
+  normaliseCrop,
+} from '@/engine/scene/image';
 import { points } from '@/engine/units/types';
 import { isErr, isOk } from '@/lib/result';
 
@@ -163,5 +170,50 @@ describe('needsClip', () => {
   it('is false for contain and fill, which never overflow', () => {
     expect(needsClip('contain', frame, 4)).toBe(false);
     expect(needsClip('fill', frame, 4)).toBe(false);
+  });
+});
+
+describe('croppedAspect', () => {
+  it('is the natural aspect for an uncropped image', () => {
+    expect(croppedAspect({ width: 400, height: 200 })).toBeCloseTo(2, 6);
+  });
+
+  it('reports the cropped region, not the file', () => {
+    // A wide photo cropped to its middle square must behave like a square, or
+    // fitBox letterboxes the wrong axis.
+    expect(
+      croppedAspect({ width: 400, height: 200 }, { x: 0.25, y: 0, width: 0.5, height: 1 }),
+    ).toBeCloseTo(1, 6);
+  });
+
+  it('survives a degenerate crop rather than dividing by zero', () => {
+    expect(croppedAspect({ width: 400, height: 200 }, { x: 0, y: 0, width: 0, height: 0 })).toBe(1);
+  });
+});
+
+describe('normaliseCrop', () => {
+  it('leaves a sane crop alone', () => {
+    const crop = { x: 0.1, y: 0.2, width: 0.5, height: 0.6 };
+    expect(normaliseCrop(crop)).toEqual(crop);
+  });
+
+  it('clamps a crop that runs off the image', () => {
+    const crop = normaliseCrop({ x: 0.8, y: 0.9, width: 0.9, height: 0.9 });
+    expect(crop.x + crop.width).toBeLessThanOrEqual(1 + 1e-9);
+    expect(crop.y + crop.height).toBeLessThanOrEqual(1 + 1e-9);
+  });
+
+  it('refuses a zero-size crop', () => {
+    // Zero would divide by zero downstream and render nothing, which reads as
+    // a broken image rather than as a crop.
+    const crop = normaliseCrop({ x: 0, y: 0, width: 0, height: 0 });
+    expect(crop.width).toBeGreaterThan(0);
+    expect(crop.height).toBeGreaterThan(0);
+  });
+
+  it('pulls negative offsets back onto the image', () => {
+    const crop = normaliseCrop({ x: -0.5, y: -0.5, width: 0.5, height: 0.5 });
+    expect(crop.x).toBe(0);
+    expect(crop.y).toBe(0);
   });
 });

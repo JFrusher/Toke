@@ -7,7 +7,7 @@ import {
   type TokeProject,
   unpackProject,
 } from '@/engine/persistence/tokeFile';
-import { rectNode, textNode } from '@/engine/scene/factories';
+import { imageNode, rectNode, textNode } from '@/engine/scene/factories';
 import { millimetresToPoints } from '@/engine/units/convert';
 import { millimetres, points } from '@/engine/units/types';
 import { isErr, isOk } from '@/lib/result';
@@ -219,5 +219,82 @@ describe('malformed input', () => {
 
     const result = await unpackProject(bogus);
     expect(isErr(result)).toBe(true);
+  });
+});
+
+describe('schema migration', () => {
+  it('fills in a crop for image nodes saved before v2', async () => {
+    // A v1 file has no crop at all. Migrating on read means every consumer
+    // sees current-format nodes and nothing downstream checks the version.
+    const v1 = {
+      ...project(),
+      designs: [
+        {
+          id: 'design-1',
+          name: 'Card',
+          spec: designSpec({ width: points(240), height: points(155), bleed: points(8) }),
+          recordSource: 'SELECT * FROM guests',
+          nodes: [
+            // Deliberately missing `crop`, as a v1 file would be.
+            {
+              ...imageNode({
+                id: 'photo',
+                x: points(0),
+                y: points(0),
+                width: points(100),
+                height: points(50),
+                assetId: 'abc',
+              }),
+              crop: undefined,
+            },
+          ],
+        },
+      ],
+      __forceVersion: 1,
+    };
+
+    const packed = await packProject(v1 as unknown as Parameters<typeof packProject>[0]);
+    if (!isOk(packed)) throw new Error(packed.error.message);
+
+    const read = await unpackProject(packed.value);
+    if (!isOk(read)) throw new Error(read.error.message);
+
+    const node = read.value.designs[0]?.nodes[0];
+    expect(node?.kind).toBe('image');
+    if (node?.kind === 'image') expect(node.crop).toEqual({ x: 0, y: 0, width: 1, height: 1 });
+  });
+
+  it('leaves a v2 crop untouched', async () => {
+    const crop = { x: 0.1, y: 0.2, width: 0.5, height: 0.6 };
+    const withCrop = {
+      ...project(),
+      designs: [
+        {
+          id: 'design-1',
+          name: 'Card',
+          spec: designSpec({ width: points(240), height: points(155), bleed: points(8) }),
+          recordSource: 'SELECT * FROM guests',
+          nodes: [
+            imageNode({
+              id: 'photo',
+              x: points(0),
+              y: points(0),
+              width: points(100),
+              height: points(50),
+              assetId: 'abc',
+              crop,
+            }),
+          ],
+        },
+      ],
+    };
+
+    const packed = await packProject(withCrop);
+    if (!isOk(packed)) throw new Error(packed.error.message);
+    const read = await unpackProject(packed.value);
+    if (!isOk(read)) throw new Error(read.error.message);
+
+    const node = read.value.designs[0]?.nodes[0];
+    if (node?.kind === 'image') expect(node.crop).toEqual(crop);
   });
 });

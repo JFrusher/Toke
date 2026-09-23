@@ -14,7 +14,9 @@ import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
 import { ImageFitPanel } from '@/components/inspector/ImageFitPanel';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
+import { TypographyPanel } from '@/components/inspector/TypographyPanel';
 import { PreflightReport } from '@/components/preview/PreflightReport';
+import { DesignSwitcher } from '@/components/shell/DesignSwitcher';
 import { DiagnosticsPanel } from '@/components/shell/DiagnosticsPanel';
 import { FileMenu } from '@/components/shell/FileMenu';
 import { LiveAnnouncer } from '@/components/shell/LiveAnnouncer';
@@ -97,6 +99,7 @@ export function AppShell() {
           <Wordmark />
         </h1>
         <FileMenu />
+        <DesignSwitcher />
 
         <div className="ml-auto flex items-center gap-1.5">
           <Button
@@ -215,6 +218,7 @@ export function AppShell() {
               className="shrink-0 overflow-auto bg-panel"
             >
               <TransformFields />
+              <TypographyPanel />
               <ImageFitPanel />
               <TokenBindingPanel />
               <ImpositionPanel />
