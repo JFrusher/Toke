@@ -10,10 +10,12 @@ import {
   serialiseForExport,
   startExport,
 } from '@/engine/pdf/exportClient';
+import { bindsImages } from '@/engine/scene/bindings';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
 import { useImpositionStore } from '@/engine/store/useImpositionStore';
+import { useLibraryStore } from '@/engine/store/useLibraryStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
@@ -51,7 +53,9 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
 
     // Resolved before the job is posted: the worker gets plain bytes and never
     // reaches into IndexedDB itself.
-    const assets = await assetsForExport(nodes);
+    // A binding may pick any library image, so the whole library ships then.
+    const images = useLibraryStore.getState().images;
+    const assets = await assetsForExport(nodes, bindsImages(nodes) ? images.values() : []);
 
     const handle = startExport(
       worker,
@@ -69,6 +73,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
         margin,
         cropMarks,
         assets,
+        images: [...images],
       },
       setProgress,
       op,

@@ -297,3 +297,44 @@ describe('progress and cancellation', () => {
     if (isErr(result)) expect(result.error.code).toBe('EXPORT_CANCELLED');
   });
 });
+
+describe('column bindings', () => {
+  const badge = {
+    ...rectNode({
+      id: 'badge',
+      x: p(10),
+      y: p(10),
+      width: p(40),
+      height: p(20),
+      fill: { kind: 'solid', color: '#3d6b4a' },
+    }),
+    bind: { visible: 'is_gf' },
+  } as SceneNode;
+
+  async function proof(nodes: readonly SceneNode[], row: Record<string, unknown>) {
+    return exportProof({ nodes, row, design: PLACE_CARD });
+  }
+
+  it('leaves a hidden object off the page', async () => {
+    const shown = await proof([badge], { is_gf: 1 });
+    const hidden = await proof([badge], { is_gf: 0 });
+    if (!isOk(shown) || !isOk(hidden)) throw new Error('proof failed');
+    // Drawn content is real bytes; the hidden card has none.
+    expect(hidden.value.byteLength).toBeLessThan(shown.value.byteLength);
+  });
+
+  it('refuses to export when a binding names a missing column', async () => {
+    // A badge silently shown on every card is as wrong as a template printed
+    // literally, so a broken binding stops the run.
+    const result = await exportSheets({
+      nodes: [badge],
+      rows: guests(3),
+      sheet: A4,
+      design: PLACE_CARD,
+      margin: mm(10),
+      cropMarks: true,
+    });
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.code).toBe('BINDING_UNKNOWN_COLUMN');
+  });
+});

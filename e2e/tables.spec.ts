@@ -8,9 +8,7 @@ import { importCsv, openDock } from './helpers';
  * keeps the file's own columns, and the record source can join it to anything.
  */
 
-const GUESTS = ['first_name,last_name,table_number', 'Ada,Lovelace,1', 'Grace,Hopper,2'].join(
-  '\n',
-);
+const GUESTS = ['first_name,last_name,table_number', 'Ada,Lovelace,1', 'Grace,Hopper,2'].join('\n');
 const MENUS = ['Table Number,Main Course', '1,Wild mushroom risotto', '2,Roast chicken'].join('\n');
 
 async function ready(page: Page) {

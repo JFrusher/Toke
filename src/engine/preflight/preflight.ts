@@ -1,3 +1,4 @@
+import { bindTree } from '@/engine/scene/bindings';
 import type { NodeId, SceneNode, TextNode } from '@/engine/scene/types';
 import { walk } from '@/engine/scene/types';
 import { autoFit } from '@/engine/text/autoFit';
@@ -17,7 +18,7 @@ import { isErr } from '@/lib/result';
  * accepts it should not be stopped from printing.
  */
 
-export type FindingKind = 'overflow' | 'unresolved' | 'empty' | 'font' | 'asset';
+export type FindingKind = 'overflow' | 'unresolved' | 'empty' | 'font' | 'asset' | 'binding';
 
 export type Finding = {
   readonly kind: FindingKind;
@@ -35,10 +36,12 @@ export type PreflightReport = {
   readonly clean: boolean;
 };
 
-function textNodes(nodes: readonly SceneNode[]): TextNode[] {
-  const found: TextNode[] = [];
-  for (const node of walk(nodes)) {
+/** Text that will actually print: a node hidden by the data is not checked. */
+function shownTextNodes(nodes: readonly SceneNode[], found: TextNode[] = []): TextNode[] {
+  for (const node of nodes) {
+    if (!node.visible) continue;
     if (node.kind === 'text') found.push(node);
+    if (node.kind === 'group') shownTextNodes(node.children, found);
   }
   return found;
 }
@@ -105,36 +108,57 @@ export function preflight(input: {
   rows: readonly Record<string, unknown>[];
   /** Asset ids present in the store. Omit when unknown to skip the check. */
   assetIds?: ReadonlySet<string>;
+  /** Image library for image bindings, `imageKey(name)` → asset id. */
+  images?: ReadonlyMap<string, string>;
 }): PreflightReport {
   const findings: Finding[] = structuralFindings(input.nodes, input.assetIds);
-  // hasTokenSyntax, not isTokenised: a malformed token does not parse, so
-  // isTokenised reports false and the node would be skipped — hiding the
-  // bindings most likely to be broken.
-  const bound = textNodes(input.nodes).filter((node) => hasTokenSyntax(node.text));
+  const names = new Map([...walk(input.nodes)].map((node) => [node.id, node.name]));
+  const images = input.images ?? new Map<string, string>();
+  const bindings = [...walk(input.nodes)].some((node) => node.bind !== undefined);
+  // Reported once per node, not once per record: a misspelled column fails
+  // on all 150 records, and 150 identical findings bury everything else.
+  const failedEverywhere = new Set<NodeId>();
 
-  for (const node of bound) {
-    const font = getFont(node.fontFamily, node.fontWeight, node.italic);
-    // Reported once per node, not once per record: a misspelled column fails
-    // on all 150 records, and 150 identical findings bury everything else.
-    let reportedStructuralFailure = false;
+  for (const [index, row] of input.rows.entries()) {
+    // Bindings first, so a hidden object is skipped and a bound width is the
+    // box auto-fit is checked against — what the PDF will actually print.
+    const bound = bindings ? bindTree(input.nodes, { row, images }) : null;
 
-    for (const [index, row] of input.rows.entries()) {
+    for (const error of bound?.errors ?? []) {
+      const nodeId = error.objectId ?? '';
+      // A missing column fails every record; a bad value is per record.
+      const everywhere = error.code === 'BINDING_UNKNOWN_COLUMN';
+      if (everywhere && failedEverywhere.has(nodeId)) continue;
+      if (everywhere) failedEverywhere.add(nodeId);
+      findings.push({
+        kind: 'binding',
+        nodeId,
+        nodeName: names.get(nodeId) ?? nodeId,
+        recordIndex: everywhere ? -1 : index,
+        detail: error.message,
+      });
+    }
+
+    // hasTokenSyntax, not isTokenised: a malformed token does not parse, so
+    // isTokenised reports false and the node would be skipped — hiding the
+    // bindings most likely to be broken.
+    for (const node of shownTextNodes(bound?.nodes ?? input.nodes)) {
+      if (!hasTokenSyntax(node.text) || failedEverywhere.has(node.id)) continue;
+
       const resolved = resolveTokens(node.text, row, {
         fallback: node.fallback,
         objectId: node.id,
       });
 
       if (isErr(resolved)) {
-        if (!reportedStructuralFailure) {
-          reportedStructuralFailure = true;
-          findings.push({
-            kind: 'unresolved',
-            nodeId: node.id,
-            nodeName: node.name,
-            recordIndex: -1,
-            detail: resolved.error.message,
-          });
-        }
+        failedEverywhere.add(node.id);
+        findings.push({
+          kind: 'unresolved',
+          nodeId: node.id,
+          nodeName: node.name,
+          recordIndex: -1,
+          detail: resolved.error.message,
+        });
         continue;
       }
 
@@ -153,6 +177,7 @@ export function preflight(input: {
 
       // Auto-fit off means the author accepted whatever happens, so there is
       // nothing to warn about.
+      const font = getFont(node.fontFamily, node.fontWeight, node.italic);
       if (node.autoFit === null || font === null) continue;
 
       const fitted = autoFit({
@@ -193,6 +218,7 @@ export type PreflightSummary = {
   readonly empty: number;
   readonly font: number;
   readonly asset: number;
+  readonly binding: number;
   readonly affectedRecords: number;
 };
 
@@ -203,6 +229,7 @@ export function summarise(report: PreflightReport): PreflightSummary {
   let empty = 0;
   let font = 0;
   let asset = 0;
+  let binding = 0;
 
   for (const finding of report.findings) {
     if (finding.recordIndex >= 0) records.add(finding.recordIndex);
@@ -211,7 +238,8 @@ export function summarise(report: PreflightReport): PreflightSummary {
     if (finding.kind === 'empty') empty += 1;
     if (finding.kind === 'font') font += 1;
     if (finding.kind === 'asset') asset += 1;
+    if (finding.kind === 'binding') binding += 1;
   }
 
-  return { overflow, unresolved, empty, font, asset, affectedRecords: records.size };
+  return { overflow, unresolved, empty, font, asset, binding, affectedRecords: records.size };
 }

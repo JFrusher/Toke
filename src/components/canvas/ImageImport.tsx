@@ -6,6 +6,7 @@ import { imageNode } from '@/engine/scene/factories';
 import { initialFrame, naturalSize } from '@/engine/scene/image';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
+import { useLibraryStore } from '@/engine/store/useLibraryStore';
 import { isErr, isOk } from '@/lib/result';
 
 /**
@@ -40,13 +41,18 @@ export function ImageImport() {
         return;
       }
 
-      const stored = await addAsset(new Blob([bytes as unknown as BlobPart], { type: file.type }));
+      // Named after the file, so an image binding can pick it by name too.
+      const stored = await addAsset(
+        new Blob([bytes as unknown as BlobPart], { type: file.type }),
+        file.name,
+      );
       if (!isOk(stored)) {
         reportDiagnostic('image', 'error', stored.error);
         return;
       }
 
       await retainAsset(stored.value.id);
+      void useLibraryStore.getState().refresh();
 
       addNode(
         imageNode({

@@ -34,7 +34,7 @@ function isAbsent(value: unknown): boolean {
  * column called `first_name`. An exact match wins, because a query is free to
  * alias a column to something containing a dot.
  */
-function lookup(
+export function lookup(
   row: Record<string, unknown>,
   reference: string,
 ): { found: boolean; value: unknown } {

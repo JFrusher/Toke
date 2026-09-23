@@ -7,6 +7,7 @@ import { type Finding, preflight, summarise } from '@/engine/preflight/preflight
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
+import { useLibraryStore } from '@/engine/store/useLibraryStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
 
 const KIND_LABEL: Record<Finding['kind'], string> = {
@@ -15,6 +16,7 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
   empty: 'Empty',
   font: 'Typeface',
   asset: 'Missing image',
+  binding: 'Binding',
 };
 
 /**
@@ -55,6 +57,8 @@ export function PreflightReport({ open, onClose }: { open: boolean; onClose: () 
     };
   }, [open]);
 
+  const images = useLibraryStore((s) => s.images);
+
   const report = useMemo(
     () =>
       open
@@ -62,9 +66,10 @@ export function PreflightReport({ open, onClose }: { open: boolean; onClose: () 
             nodes,
             rows: records as readonly Record<string, unknown>[],
             ...(assetIds === undefined ? {} : { assetIds }),
+            images,
           })
         : null,
-    [open, nodes, records, assetIds],
+    [open, nodes, records, assetIds, images],
   );
 
   const summary = report === null ? null : summarise(report);
@@ -105,7 +110,8 @@ export function PreflightReport({ open, onClose }: { open: boolean; onClose: () 
                 <span data-numeric>{summary.unresolved}</span> unresolved,{' '}
                 <span data-numeric>{summary.empty}</span> empty,{' '}
                 <span data-numeric>{summary.font}</span> typeface,{' '}
-                <span data-numeric>{summary.asset}</span> missing image.
+                <span data-numeric>{summary.asset}</span> missing image,{' '}
+                <span data-numeric>{summary.binding}</span> binding.
               </>
             )}
           </p>

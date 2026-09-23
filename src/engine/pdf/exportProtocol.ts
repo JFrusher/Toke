@@ -28,6 +28,8 @@ export type ExportJob = {
   readonly cropMarks: boolean;
   readonly fonts: readonly ExportFont[];
   readonly assets: readonly (readonly [string, Uint8Array])[];
+  /** Image library, `imageKey(name)` → asset id, for image bindings. */
+  readonly images?: readonly (readonly [string, string])[];
 };
 
 export type ExportRequest =

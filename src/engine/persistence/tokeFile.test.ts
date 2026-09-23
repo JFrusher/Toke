@@ -298,3 +298,39 @@ describe('schema migration', () => {
     if (node?.kind === 'image') expect(node.crop).toEqual(crop);
   });
 });
+
+describe('v3: bindings and named images', () => {
+  it('keeps column bindings on nodes', async () => {
+    const input = project();
+    const [design] = input.designs;
+    if (design === undefined) throw new Error('no design');
+    const bound = {
+      ...input,
+      designs: [
+        {
+          ...design,
+          nodes: [
+            {
+              ...rectNode({ id: 'b', x: p(0), y: p(0), width: p(1), height: p(1) }),
+              bind: { visible: 'is_gf' },
+            },
+          ],
+        },
+      ],
+    };
+    const back = await roundTrip(bound);
+    expect(back.designs[0]?.nodes[0]?.bind).toEqual({ visible: 'is_gf' });
+  });
+
+  it('keeps image library names', async () => {
+    const input = project();
+    const named = {
+      ...input,
+      assets: [
+        { id: 'b'.repeat(64), type: 'image/png', bytes: new Uint8Array([5]), name: 'GF.png' },
+      ],
+    };
+    const back = await roundTrip(named);
+    expect(back.assets[0]?.name).toBe('GF.png');
+  });
+});

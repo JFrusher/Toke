@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { getAsset } from '@/engine/persistence/assetStore';
+import { addAsset, getAsset } from '@/engine/persistence/assetStore';
 import {
   type Autosave,
   claimWriter,
@@ -14,22 +14,28 @@ import {
 } from '@/engine/persistence/autosave';
 import { downloadProject, projectNameFrom, readProjectFile } from '@/engine/persistence/fileIo';
 import { fromProject, toProject } from '@/engine/persistence/project';
+import type { TokeProject } from '@/engine/persistence/tokeFile';
 import { packProject, unpackProject } from '@/engine/persistence/tokeFile';
+import { bindsImages } from '@/engine/scene/bindings';
 import type { SceneNode } from '@/engine/scene/types';
 import { useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { useDesignStore } from '@/engine/store/useDesignStore';
 import { reportDiagnostic, useDiagnosticsStore } from '@/engine/store/useDiagnosticsStore';
 import { fontsForProject, useFontStore } from '@/engine/store/useFontStore';
+import { useLibraryStore } from '@/engine/store/useLibraryStore';
 import { points } from '@/engine/units/types';
 import type { AppError } from '@/lib/errors';
 import { isErr } from '@/lib/result';
 
 const DEFAULT_NAME = 'Untitled';
 
-/** Every asset the scene references, as bytes, for the .toke zip. */
+/**
+ * Every asset the project needs, as bytes, for the .toke zip: what any design
+ * places, plus the whole image library when a binding may pick from it.
+ */
 async function assetsForProject(nodes: readonly SceneNode[]) {
-  const ids = new Set<string>();
+  const ids = new Set<string>(bindsImages(nodes) ? useLibraryStore.getState().images.values() : []);
 
   const walk = (list: readonly SceneNode[]) => {
     for (const node of list) {
@@ -39,10 +45,12 @@ async function assetsForProject(nodes: readonly SceneNode[]) {
   };
   walk(nodes);
 
-  const assets: { id: string; type: string; bytes: Uint8Array }[] = [];
+  const assets: TokeProject['assets'][number][] = [];
   for (const id of ids) {
     const asset = await getAsset(id);
-    if (asset.ok) assets.push({ id, type: asset.value.type, bytes: asset.value.bytes });
+    if (!asset.ok) continue;
+    const { type, bytes, name } = asset.value;
+    assets.push({ id, type, bytes, ...(name === undefined ? {} : { name }) });
   }
   return assets;
 }
@@ -79,7 +87,12 @@ export function FileMenu() {
       database: await data.exportDatabase(),
       // Assets travel inside the file. A .toke that references an image only
       // by hash opens on another machine with a hole where the logo was.
-      assets: await assetsForProject(canvas.nodes),
+      // Every design, not just the open one: a parked design's images would
+      // otherwise be missing when the file is opened anywhere else.
+      assets: await assetsForProject([
+        ...canvas.nodes,
+        ...designs.others.flatMap((design) => design.nodes),
+      ]),
       // Uploaded faces travel; bundled ones do not. A project referencing a
       // font this build ships can find it, but one referencing a user's own
       // file would open with the wrong typeface everywhere.
@@ -158,6 +171,7 @@ export function FileMenu() {
   // ---- crash recovery ----------------------------------------------------
   useEffect(() => {
     void needsRecovery().then(setRecoverable);
+    void useLibraryStore.getState().refresh();
   }, []);
 
   async function recover() {
@@ -180,6 +194,18 @@ export function FileMenu() {
       setProblem(project.error);
       return;
     }
+
+    // Images into this browser's store before the scene draws. Opening a file
+    // never did this, so a project opened on another machine had a hole
+    // wherever an image was placed.
+    for (const asset of project.value.assets) {
+      const stored = await addAsset(
+        new Blob([asset.bytes as unknown as BlobPart], { type: asset.type }),
+        asset.name,
+      );
+      if (!stored.ok) reportDiagnostic('project', 'error', stored.error);
+    }
+    await useLibraryStore.getState().refresh();
 
     // Fonts first: the scene is measured as it loads, and a text node laid out
     // against a substituted face would be wrong until something re-rendered.

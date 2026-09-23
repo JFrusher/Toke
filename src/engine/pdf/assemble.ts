@@ -7,6 +7,7 @@ import { solveImposition } from '@/engine/imposition/solve';
 import type { DesignSpec, SheetSpec } from '@/engine/imposition/specs';
 import { addSheetPage, createPdfDocument, finish, flipY } from '@/engine/pdf/document';
 import { renderNodes } from '@/engine/pdf/render';
+import { bindTree } from '@/engine/scene/bindings';
 import type { SceneNode, TextNode } from '@/engine/scene/types';
 import { getFont } from '@/engine/text/fontLoader';
 import { renderTextNode } from '@/engine/tokens/render';
@@ -39,6 +40,8 @@ export type ExportInput = {
   readonly cropMarks: boolean;
   /** Asset bytes by content hash, resolved from the store before rendering. */
   readonly assets?: ReadonlyMap<string, Uint8Array>;
+  /** Image library for image bindings, `imageKey(name)` → asset id. */
+  readonly images?: ReadonlyMap<string, string>;
   /** Called with 0–1 after each sheet, so a long export can show progress. */
   readonly onProgress?: (fraction: number, sheet: number) => void;
   /**
@@ -58,12 +61,24 @@ export type ExportInput = {
 function resolveForRecord(
   nodes: readonly SceneNode[],
   row: Record<string, unknown>,
+  images: ReadonlyMap<string, string> = new Map(),
+): Result<readonly SceneNode[]> {
+  // Bindings first: a bound width changes what auto-fit measures against.
+  const bound = bindTree(nodes, { row, images });
+  const [bindingError] = bound.errors;
+  if (bindingError !== undefined) return err(bindingError);
+  return resolveText(bound.nodes, row);
+}
+
+function resolveText(
+  nodes: readonly SceneNode[],
+  row: Record<string, unknown>,
 ): Result<readonly SceneNode[]> {
   const resolved: SceneNode[] = [];
 
   for (const node of nodes) {
     if (node.kind === 'group') {
-      const children = resolveForRecord(node.children, row);
+      const children = resolveText(node.children, row);
       if (isErr(children)) return children;
       resolved.push({ ...node, children: children.value });
       continue;
@@ -145,7 +160,7 @@ export async function exportSheets(input: ExportInput): Promise<Result<ExportRep
       const row = input.rows[recordIndex];
       if (cell === undefined || row === undefined) continue;
 
-      const resolved = resolveForRecord(input.nodes, row);
+      const resolved = resolveForRecord(input.nodes, row, input.images);
       if (isErr(resolved)) return err(resolved.error);
 
       const drawn = await renderNodes({
@@ -192,6 +207,7 @@ export async function exportProof(input: {
   row: Record<string, unknown>;
   design: DesignSpec;
   assets?: ReadonlyMap<string, Uint8Array>;
+  images?: ReadonlyMap<string, string>;
 }): Promise<Result<Uint8Array>> {
   const sheet: SheetSpec = {
     id: 'custom',
@@ -203,7 +219,7 @@ export async function exportProof(input: {
   const context = await createPdfDocument();
   const page = addSheetPage(context, sheet, { trim: null });
 
-  const resolved = resolveForRecord(input.nodes, input.row);
+  const resolved = resolveForRecord(input.nodes, input.row, input.images);
   if (isErr(resolved)) return err(resolved.error);
 
   const drawn = await renderNodes({
