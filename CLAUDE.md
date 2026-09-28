@@ -83,9 +83,10 @@ src/
 │  │                              SmallViewport, ResizeHandle, LiveAnnouncer
 │  ├─ canvas/                     StudioCanvas, CanvasRulers, CanvasGuides, CanvasToolbar,
 │  │                              LayersPanel, PenPreview, ImageImport
-│  ├─ data/                       DataGrid, CsvImportDialog, SqlConsole, SqlHighlight
+│  ├─ data/                       DataGrid, CsvImportDialog, SqlConsole, SqlHighlight,
+│  │                              RuleBuilder
 │  ├─ inspector/                  TransformFields, TypographyPanel, TokenBindingPanel,
-│  │                              ImageFitPanel
+│  │                              ImageFitPanel, DataBindingsPanel
 │  ├─ preview/                    CycleBar, PreflightReport
 │  ├─ imposition/                 ImpositionPanel, SheetPreview, ExportDialog
 │  ├─ brand/                      Wordmark, Tokey (onboarding only — §4.8)
@@ -96,10 +97,12 @@ src/
 │  ├─ geometry/                   rects, matrix maths
 │  ├─ canvas/                     snapping, arrange, rulers, pen geometry
 │  ├─ imposition/                 solver, crop marks, tent fold, pagination
-│  ├─ db/                         db.worker.ts, client, protocol, schema, csv, import
+│  ├─ db/                         db.worker.ts, client, protocol, schema, csv, import,
+│  │                              recordSource, rules (rule builder → SQL)
 │  ├─ text/                       measure.ts, fontLoader.ts, autoFit.ts
 │  ├─ tokens/                     parser, resolver, formatters, render
-│  ├─ scene/                      SceneNode types, factories, fabric ⇄ scene, image fit
+│  ├─ scene/                      SceneNode types, factories, fabric ⇄ scene, image fit,
+│  │                              bindings (column-bound properties per row)
 │  ├─ preflight/                  overflow, token, font and asset findings
 │  ├─ pdf/                        pdf.worker.ts, render, assemble, exportClient
 │  ├─ persistence/                tokeFile, project, autosave, assetStore, fileIo
@@ -107,7 +110,7 @@ src/
 │  ├─ templates/                  starter designs and the tutorial
 │  ├─ theme/                      WCAG contrast audit
 │  └─ store/                      zustand: studio, data, canvas, imposition, shell,
-│                                 design, font, diagnostics
+│                                 design, font, library, diagnostics
 │
 └─ lib/                           cn(), Result, AppError, buildInfo, small DOM helpers
 ```
@@ -426,7 +429,7 @@ Notes:
 
 ## 8. Scope
 
-### v1.1 — data-driven design (in progress)
+### v1.1 — data-driven design (shipped)
 
 Decided 2026-09-23. The record source is the rule engine: SQL computes columns, and canvas
 properties bind to them. One rule language, not a second one on the canvas.

@@ -32,6 +32,10 @@ export function SqlConsole() {
   const recordSource = useDataStore((s) => s.recordSource);
   const setRecordSource = useDataStore((s) => s.setRecordSource);
   const schema = useDataStore((s) => s.schema);
+  const savedQueries = useDataStore((s) => s.savedQueries);
+  const saveQuery = useDataStore((s) => s.saveQuery);
+  const removeQuery = useDataStore((s) => s.removeQuery);
+  const [saveName, setSaveName] = useState('');
 
   const [sql, setSql] = useState('SELECT * FROM guests');
   const [result, setResult] = useState<ResultTable | null>(null);
@@ -116,6 +120,26 @@ export function SqlConsole() {
           </Button>
           <span className="text-[11px] text-ink-subtle">Ctrl+Enter</span>
 
+          <input
+            value={saveName}
+            onChange={(event) => setSaveName(event.target.value)}
+            placeholder="Name to save as"
+            aria-label="Name to save the query as"
+            data-testid="sql-save-name"
+            className="ml-3 h-6 w-36 rounded-[2px] border border-border-control bg-panel-raised px-1.5 text-[12px] text-ink placeholder:text-ink-subtle focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+          />
+          <Button
+            variant="quiet"
+            disabled={saveName.trim() === '' || sql.trim() === ''}
+            onClick={() => {
+              void saveQuery(saveName, sql);
+              setSaveName('');
+            }}
+            data-testid="sql-save"
+          >
+            Save
+          </Button>
+
           <Button
             variant="quiet"
             disabled={busy || isCurrentSource}
@@ -184,6 +208,34 @@ export function SqlConsole() {
       >
         {/* What can be queried. Tables a user imported have whatever columns
             their file had, and nobody remembers those exactly. */}
+        {/* Kept in the project's database, so they travel with the file. */}
+        <h3 className="px-2 py-1.5 font-medium text-[11px] text-ink-muted">Saved</h3>
+        {savedQueries.length === 0 ? (
+          <p className="px-2 pb-2 text-[11px] text-ink-subtle">No saved queries.</p>
+        ) : (
+          <ul data-testid="sql-saved" className="pb-2">
+            {savedQueries.map((saved) => (
+              <li key={saved.name} className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setSql(saved.sql)}
+                  className="min-w-0 flex-1 truncate px-2 py-1 text-left text-[12px] text-ink transition-colors hover:bg-accent-weak focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                >
+                  {saved.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void removeQuery(saved.name)}
+                  aria-label={`Remove ${saved.name}`}
+                  className="h-6 w-6 shrink-0 text-[12px] text-ink-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <h3 className="px-2 py-1.5 font-medium text-[11px] text-ink-muted">Tables</h3>
         <dl data-testid="sql-schema" className="px-2 pb-2">
           {Object.entries(schema).map(([table, columns]) => (

@@ -513,6 +513,27 @@ Removed; nothing imported it from there.
 
 ---
 
+## 6a. v1.1 — data-driven design · DONE · 2026-09-28
+
+Record source per design saved in the file (it was always written as the
+default); CSV import into new tables; column bindings for visibility, colour,
+image and geometry through one `bindTree` used by canvas, pre-flight and PDF;
+image library by file name; variant layouts (a column picks the design, or
+each design prints alone); rule builder writing CASE columns; saved queries in
+the project database. Defects found on the way and fixed: opened projects
+never restored their images; saving packed only the open design's images;
+dragging token text in live mode overwrote the template; a hidden group's
+children still drew.
+
+Known limits, deliberate:
+- The asset store is per browser, so the image library can show and pack
+  images from other projects in the same browser (ponytail note in
+  useLibraryStore).
+- Pre-flight checks the open design only; a mixed run's other designs are
+  checked by the export itself, which refuses on the first error.
+
+---
+
 ## 7. Decisions — considered and declined
 
 Recorded so they are not rediscovered as problems. Each was considered and

@@ -36,6 +36,8 @@ type DataState = {
    * console's schema list. Includes tables the user created from a CSV.
    */
   readonly schema: Readonly<Record<string, readonly string[]>>;
+  /** Queries the user named in the SQL console, kept in the project's database. */
+  readonly savedQueries: readonly { readonly name: string; readonly sql: string }[];
   /** Everything in the edited table — what the data grid shows. */
   readonly rows: readonly Row[];
   readonly columns: readonly TableColumn[];
@@ -55,6 +57,9 @@ type DataState = {
   refresh: () => Promise<void>;
   /** Shows another table in the grid. */
   setTable: (table: string) => Promise<void>;
+  /** Saves under a name, replacing any query already called that. */
+  saveQuery: (name: string, sql: string) => Promise<void>;
+  removeQuery: (name: string) => Promise<void>;
   /**
    * Imports a CSV, optionally with a mapping the user has edited.
    *
@@ -89,7 +94,8 @@ type DataState = {
 const SCHEMA_QUERY = `
   SELECT m.name AS table_name, p.name AS column_name
   FROM sqlite_master m JOIN pragma_table_info(m.name) p
-  WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND m.name <> 'schema_version'
+  WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND substr(m.name, 1, 5) <> 'toke_'
+    AND m.name <> 'schema_version'
   ORDER BY m.name, p.cid`;
 
 /** Why a name cannot be a new table, or null if it can. */
@@ -98,7 +104,7 @@ export function newTableProblem(
   schema: Readonly<Record<string, readonly string[]>>,
 ): string | null {
   if (name.trim() === '') return 'The new table needs a name.';
-  if (name.toLowerCase().startsWith('sqlite_')) return 'Names starting "sqlite_" are reserved.';
+  if (/^(sqlite|toke)_/i.test(name)) return 'Names starting "sqlite_" or "toke_" are reserved.';
   const taken = Object.keys(schema).some((t) => t.toLowerCase() === name.toLowerCase());
   return taken ? `There is already a table called ${name}.` : null;
 }
@@ -112,6 +118,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   error: null,
   table: 'guests',
   schema: {},
+  savedQueries: [],
   rows: [],
   columns: [],
   recordSource: DEFAULT_RECORD_SOURCE,
@@ -157,7 +164,14 @@ export const useDataStore = create<DataState>((set, get) => ({
     // A table dropped from the SQL console, or a project without it, falls
     // back to guests rather than leaving the grid pointing at nothing.
     if (schema[get().table] === undefined) set({ table: 'guests' });
-    set({ schema });
+    const saved = await db.query('SELECT name, sql FROM toke_saved_queries ORDER BY name');
+    set({
+      schema,
+      savedQueries: isErr(saved)
+        ? []
+        : saved.value.rows.map((row) => ({ name: String(row.name), sql: String(row.sql) })),
+    });
+    if (isErr(saved)) set({ error: saved.error });
     const table = get().table;
 
     const info = await db.query(`PRAGMA table_info(${quote(table)})`);
@@ -185,6 +199,25 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   query(sql) {
     return ensureClient().query(sql);
+  },
+
+  async saveQuery(name, sql) {
+    const trimmed = name.trim();
+    if (trimmed === '') return;
+    const result = await ensureClient().exec(
+      'INSERT OR REPLACE INTO toke_saved_queries (name, sql) VALUES (?, ?)',
+      [trimmed, sql],
+    );
+    if (isErr(result)) set({ error: result.error });
+    await get().refresh();
+  },
+
+  async removeQuery(name) {
+    const result = await ensureClient().exec('DELETE FROM toke_saved_queries WHERE name = ?', [
+      name,
+    ]);
+    if (isErr(result)) set({ error: result.error });
+    await get().refresh();
   },
 
   async setTable(table) {

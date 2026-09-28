@@ -13,7 +13,7 @@ import { type DisplayUnit, isDisplayUnit } from '@/engine/units/types';
 
 const KEY = 'toke.shell.v1';
 
-export type BottomTab = 'data' | 'sql' | 'diagnostics';
+export type BottomTab = 'data' | 'sql' | 'rules' | 'diagnostics';
 
 type Persisted = {
   readonly leftWidth: number;

@@ -8,6 +8,7 @@ import { CanvasToolbar } from '@/components/canvas/CanvasToolbar';
 import { LayersPanel } from '@/components/canvas/LayersPanel';
 import { CsvImportDialog } from '@/components/data/CsvImportDialog';
 import { DataGrid } from '@/components/data/DataGrid';
+import { RuleBuilder } from '@/components/data/RuleBuilder';
 import { SqlConsole } from '@/components/data/SqlConsole';
 import { ExportDialog } from '@/components/imposition/ExportDialog';
 import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
@@ -42,6 +43,7 @@ const StudioCanvas = dynamic(
 const TABS: readonly { id: BottomTab; label: string }[] = [
   { id: 'data', label: 'Data' },
   { id: 'sql', label: 'SQL' },
+  { id: 'rules', label: 'Rules' },
   { id: 'diagnostics', label: 'Diagnostics' },
 ];
 
@@ -63,6 +65,7 @@ export function AppShell() {
   const rightOpen = useShellStore((s) => s.rightOpen);
   const bottomOpen = useShellStore((s) => s.bottomOpen);
   const bottomTab = useShellStore((s) => s.bottomTab);
+  const recordSource = useDataStore((s) => s.recordSource);
   const setBottomTab = useShellStore((s) => s.setBottomTab);
   const setLeftWidth = useShellStore((s) => s.setLeftWidth);
   const setRightWidth = useShellStore((s) => s.setRightWidth);
@@ -293,6 +296,9 @@ export function AppShell() {
                 <DiagnosticsPanel />
               ) : bottomTab === 'sql' ? (
                 <SqlConsole />
+              ) : bottomTab === 'rules' ? (
+                // Keyed on the record source: a new source means a new draft.
+                <RuleBuilder key={recordSource} />
               ) : (
                 <>
                   {dataError !== null && (

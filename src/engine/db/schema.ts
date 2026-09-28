@@ -58,6 +58,17 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_guests_rsvp_status ON guests(rsvp_status);
     `,
   },
+  {
+    // Named queries live in the database, so they travel with the project
+    // file and belong to the data they were written against.
+    version: 2,
+    up: `
+      CREATE TABLE toke_saved_queries (
+        name TEXT PRIMARY KEY,
+        sql  TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.reduce(
