@@ -1,13 +1,14 @@
 'use client';
 
 import * as fabric from 'fabric';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasGuides } from '@/components/canvas/CanvasGuides';
 import { CanvasRulers, RULER_SIZE, useCursorPosition } from '@/components/canvas/CanvasRulers';
 import { PenPreview } from '@/components/canvas/PenPreview';
 import { EMPTY_PATH, type PenPath, penToNode, shouldClose } from '@/engine/canvas/pen';
 import { type SnapMatch, snap, snapTargets } from '@/engine/canvas/snapping';
 import { getAsset, objectUrlFor } from '@/engine/persistence/assetStore';
+import { bindTree, keepAuthored } from '@/engine/scene/bindings';
 import { fromFabricObject, toFabricProps } from '@/engine/scene/fabric';
 import { ellipseNode, lineNode, rectNode, textNode } from '@/engine/scene/factories';
 import { croppedAspect, fitBox } from '@/engine/scene/image';
@@ -15,6 +16,7 @@ import type { NodeId, SceneNode } from '@/engine/scene/types';
 import { MAX_ZOOM, MIN_ZOOM, type Tool, useCanvasStore } from '@/engine/store/useCanvasStore';
 import { useDataStore } from '@/engine/store/useDataStore';
 import { reportDiagnostic } from '@/engine/store/useDiagnosticsStore';
+import { useLibraryStore } from '@/engine/store/useLibraryStore';
 import { useStudioStore } from '@/engine/store/useStudioStore';
 import { ensureFontsLoaded, getFont } from '@/engine/text/fontLoader';
 import { measureText } from '@/engine/text/measure';
@@ -51,8 +53,14 @@ function makeId(kind: string): NodeId {
 function renderableNodes(nodes: readonly SceneNode[]): SceneNode[] {
   const flat: SceneNode[] = [];
   for (const node of nodes) {
-    if (node.kind === 'group') flat.push(...renderableNodes(node.children));
-    else flat.push(node);
+    // A hidden group hides its children: flattening must not lose that, or a
+    // group hidden by the data would still draw every object inside it.
+    if (node.kind === 'group') {
+      const children = renderableNodes(node.children);
+      flat.push(
+        ...(node.visible ? children : children.map((child) => ({ ...child, visible: false }))),
+      );
+    } else flat.push(node);
   }
   return flat;
 }
@@ -385,35 +393,57 @@ export function StudioCanvas() {
   const [fontsReady, setFontsReady] = useState(false);
 
   const nodes = useCanvasStore((s) => s.nodes);
-  const { urls: imageUrls, elements: imageElements } = useImageAssets(nodes);
+  const mode = useStudioStore((s) => s.mode);
+  const cursor = useStudioStore((s) => s.cursor);
+  // The record source, not the edited table: a design may print only
+  // accepted guests, and previewing the wrong set hides real problems.
+  const rows = useDataStore((s) => s.records);
+  const library = useLibraryStore((s) => s.images);
+
+  /**
+   * What the canvas draws. In live mode, column bindings are applied for the
+   * current row — the same `bindTree` pre-flight and the PDF call. Design mode
+   * shows the design as authored.
+   */
+  const bound = useMemo(() => {
+    const row = (rows[cursor] ?? null) as Record<string, unknown> | null;
+    if (mode !== 'live' || row === null) return { nodes, errors: [] };
+    return bindTree(nodes, { row, images: library });
+  }, [nodes, mode, rows, cursor, library]);
+  const shown = bound.nodes;
+
+  // Reported from an effect: a store write during render is a React violation.
+  useEffect(() => {
+    for (const error of bound.errors) reportDiagnostic('bindings', 'error', error);
+  }, [bound.errors]);
+
+  const { urls: imageUrls, elements: imageElements } = useImageAssets(shown);
   const selection = useCanvasStore((s) => s.selection);
   const zoom = useCanvasStore((s) => s.zoom);
   const panX = useCanvasStore((s) => s.panX);
   const panY = useCanvasStore((s) => s.panY);
   const tool = useCanvasStore((s) => s.tool);
   const artboard = useCanvasStore((s) => s.artboard);
-  const mode = useStudioStore((s) => s.mode);
-  const cursor = useStudioStore((s) => s.cursor);
-  // The record source, not the edited table: a design may print only
-  // accepted guests, and previewing the wrong set hides real problems.
-  const rows = useDataStore((s) => s.records);
-
   const commitFromFabric = useCallback((label: string, coalesceKey?: string) => {
     const store = useCanvasStore.getState();
+    // In live mode the canvas shows one row: resolved text and the data's
+    // values for bound properties. Neither may be written back into the design.
+    const live = useStudioStore.getState().mode === 'live';
     const updated = store.nodes.map((node) => {
       const object = objectsRef.current.get(node.id);
       if (object === undefined) return node;
-      const updated = fromFabricObject(
+      const edited = fromFabricObject(
         {
           ...sceneTransform(object),
           width: object.width,
           height: object.height,
           opacity: object.opacity,
           visible: object.visible,
-          ...(object instanceof fabric.IText ? { text: object.text } : {}),
+          ...(object instanceof fabric.IText && !live ? { text: object.text } : {}),
         },
         node,
       );
+      const updated = live ? keepAuthored(edited, node) : edited;
 
       // A text edit changes the string, so the box must be remeasured — the
       // width Fabric reports is its own, and the node must carry ours.
@@ -529,7 +559,7 @@ export function StudioCanvas() {
 
     const objects = objectsRef.current;
     const currentRow = (rows[cursor] ?? null) as Record<string, unknown> | null;
-    const renderable = renderableNodes(nodes);
+    const renderable = renderableNodes(shown);
     const live = new Set(renderable.map((node) => node.id));
 
     for (const [id, object] of objects) {
@@ -595,7 +625,7 @@ export function StudioCanvas() {
     // imageUrls and imageElements are dependencies, not incidental reads: the
     // bytes arrive from IndexedDB after the first render, and without them the
     // placeholder frame would never be replaced by the picture.
-  }, [nodes, fontsReady, mode, cursor, rows, imageUrls, imageElements]);
+  }, [shown, fontsReady, mode, cursor, rows, imageUrls, imageElements]);
 
   // ---- selection: store → fabric ----------------------------------------
   useEffect(() => {

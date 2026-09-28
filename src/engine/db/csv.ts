@@ -180,6 +180,8 @@ export function proposeMapping(
       return { source: source.name, target: match.name, action: 'map', type: source.inferred };
     }
 
-    return { source: source.name, target: key, action: 'create', type: source.inferred };
+    // Every table toke creates has its own `id`; the file's is kept alongside.
+    const target = key === 'id' ? 'csv_id' : key;
+    return { source: source.name, target, action: 'create', type: source.inferred };
   });
 }

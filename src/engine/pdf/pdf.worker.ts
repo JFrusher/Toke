@@ -57,10 +57,17 @@ async function run(request: Extract<ExportRequest, { op: 'export' | 'proof' }>):
   }
 
   const assets = new Map(job.assets);
+  const images = new Map(job.images ?? []);
 
   if (request.op === 'proof') {
     const row = job.rows[0] ?? {};
-    const result = await exportProof({ nodes: job.nodes, row, design: job.design, assets });
+    const result = await exportProof({
+      nodes: job.nodes,
+      row,
+      design: job.design,
+      assets,
+      images,
+    });
     if (isErr(result)) send({ op: 'failed', error: result.error });
     else
       send({
@@ -82,6 +89,10 @@ async function run(request: Extract<ExportRequest, { op: 'export' | 'proof' }>):
     margin: job.margin,
     cropMarks: job.cropMarks,
     assets,
+    images,
+    ...(job.layouts === undefined
+      ? {}
+      : { layouts: { column: job.layouts.column, designs: new Map(job.layouts.designs) } }),
     onProgress: (fraction, sheet) => {
       send({ op: 'progress', fraction, sheet });
     },

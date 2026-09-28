@@ -28,6 +28,13 @@ export type ExportJob = {
   readonly cropMarks: boolean;
   readonly fonts: readonly ExportFont[];
   readonly assets: readonly (readonly [string, Uint8Array])[];
+  /** Image library, `imageKey(name)` → asset id, for image bindings. */
+  readonly images?: readonly (readonly [string, string])[];
+  /** Mixed run: `column` names each row's design, keyed by lower-cased name. */
+  readonly layouts?: {
+    readonly column: string;
+    readonly designs: readonly (readonly [string, readonly SceneNode[]])[];
+  };
 };
 
 export type ExportRequest =

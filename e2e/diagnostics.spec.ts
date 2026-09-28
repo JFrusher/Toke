@@ -141,10 +141,10 @@ test('dock tabs are operable with arrow keys', async ({ page }) => {
 
   await page.getByTestId('dock-tab-diagnostics').focus();
   await page.keyboard.press('ArrowLeft');
-  // Data, SQL, Diagnostics — one step left of Diagnostics is SQL.
-  await expect(page.getByTestId('dock-tab-sql')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('dock-tab-sql')).toBeFocused();
+  // Data, SQL, Rules, Diagnostics — one step left of Diagnostics is Rules.
+  await expect(page.getByTestId('dock-tab-rules')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('dock-tab-rules')).toBeFocused();
 
   await page.keyboard.press('ArrowLeft');
-  await expect(page.getByTestId('dock-tab-data')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('dock-tab-sql')).toHaveAttribute('aria-selected', 'true');
 });

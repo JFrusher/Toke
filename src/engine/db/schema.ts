@@ -58,6 +58,17 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_guests_rsvp_status ON guests(rsvp_status);
     `,
   },
+  {
+    // Named queries live in the database, so they travel with the project
+    // file and belong to the data they were written against.
+    version: 2,
+    up: `
+      CREATE TABLE toke_saved_queries (
+        name TEXT PRIMARY KEY,
+        sql  TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.reduce(
@@ -126,6 +137,7 @@ export type TableColumn = {
   readonly declaredType: string;
   readonly notNull: boolean;
   readonly primaryKey: boolean;
+  readonly hasDefault: boolean;
 };
 
 export function tableColumns(db: DatabaseHandle, table: string): Result<readonly TableColumn[]> {
@@ -154,5 +166,6 @@ export function toTableColumns(rows: readonly Row[]): readonly TableColumn[] {
     declaredType: String(row.type ?? ''),
     notNull: row.notnull === 1,
     primaryKey: row.pk === 1,
+    hasDefault: row.dflt_value !== null && row.dflt_value !== undefined,
   }));
 }

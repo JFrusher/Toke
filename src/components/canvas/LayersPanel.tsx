@@ -29,6 +29,11 @@ function isBound(node: SceneNode): boolean {
   return isGroup(node) ? node.children.some(isBound) : false;
 }
 
+/** True when a property of this node, or of anything inside it, is driven by data. */
+function isDataDriven(node: SceneNode): boolean {
+  return node.bind !== undefined || (isGroup(node) && node.children.some(isDataDriven));
+}
+
 function LayerRow({
   node,
   depth,
@@ -49,6 +54,7 @@ function LayerRow({
 
   const isSelected = selected.includes(node.id);
   const bound = isBound(node);
+  const driven = isDataDriven(node);
 
   useEffect(() => {
     if (renaming) input.current?.select();
@@ -115,6 +121,14 @@ function LayerRow({
             {bound && (
               <span data-testid="layer-bound" className="ml-auto shrink-0 text-[11px] text-bound">
                 bound
+              </span>
+            )}
+            {driven && (
+              <span
+                data-testid="layer-conditional"
+                className={cn('shrink-0 text-[11px] text-conditional', !bound && 'ml-auto')}
+              >
+                data
               </span>
             )}
           </button>

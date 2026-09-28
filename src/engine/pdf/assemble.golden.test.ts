@@ -4,7 +4,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { designSpec, sheetPreset } from '@/engine/imposition/specs';
-import { exportProof, exportSheets } from '@/engine/pdf/assemble';
+import { exportProof, exportSheets, layoutFor } from '@/engine/pdf/assemble';
 import { rectNode, textNode } from '@/engine/scene/factories';
 import type { SceneNode } from '@/engine/scene/types';
 import { fontBytes, PLEX_SANS_REGULAR } from '@/engine/text/fixtures';
@@ -295,5 +295,93 @@ describe('progress and cancellation', () => {
 
     expect(isErr(result)).toBe(true);
     if (isErr(result)) expect(result.error.code).toBe('EXPORT_CANCELLED');
+  });
+});
+
+describe('column bindings', () => {
+  const badge = {
+    ...rectNode({
+      id: 'badge',
+      x: p(10),
+      y: p(10),
+      width: p(40),
+      height: p(20),
+      fill: { kind: 'solid', color: '#3d6b4a' },
+    }),
+    bind: { visible: 'is_gf' },
+  } as SceneNode;
+
+  async function proof(nodes: readonly SceneNode[], row: Record<string, unknown>) {
+    return exportProof({ nodes, row, design: PLACE_CARD });
+  }
+
+  it('leaves a hidden object off the page', async () => {
+    const shown = await proof([badge], { is_gf: 1 });
+    const hidden = await proof([badge], { is_gf: 0 });
+    if (!isOk(shown) || !isOk(hidden)) throw new Error('proof failed');
+    // Drawn content is real bytes; the hidden card has none.
+    expect(hidden.value.byteLength).toBeLessThan(shown.value.byteLength);
+  });
+
+  it('refuses to export when a binding names a missing column', async () => {
+    // A badge silently shown on every card is as wrong as a template printed
+    // literally, so a broken binding stops the run.
+    const result = await exportSheets({
+      nodes: [badge],
+      rows: guests(3),
+      sheet: A4,
+      design: PLACE_CARD,
+      margin: mm(10),
+      cropMarks: true,
+    });
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.code).toBe('BINDING_UNKNOWN_COLUMN');
+  });
+});
+
+describe('mixed layouts', () => {
+  const veg = [rectNode({ id: 'veg', x: p(0), y: p(0), width: p(10), height: p(10) })];
+  const layouts = { column: 'design', designs: new Map([['menu-veg', veg]]) };
+
+  it('prints the design each row names, ignoring case', () => {
+    const picked = layoutFor({ nodes: NODES, layouts }, { design: 'Menu-Veg' });
+    expect(isOk(picked) && picked.value).toBe(veg);
+  });
+
+  it('prints the run design for an empty cell', () => {
+    const picked = layoutFor({ nodes: NODES, layouts }, { design: null });
+    expect(isOk(picked) && picked.value).toBe(NODES);
+  });
+
+  it('refuses a name no design has', async () => {
+    const result = await exportSheets({
+      nodes: NODES,
+      rows: [{ first_name: 'A', last_name: 'B', design: 'menu-vegan' }],
+      sheet: A4,
+      design: PLACE_CARD,
+      margin: mm(10),
+      cropMarks: true,
+      layouts,
+    });
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.message).toContain('menu-vegan');
+  });
+
+  it('mixes designs on one sheet', async () => {
+    const result = await exportSheets({
+      nodes: NODES,
+      rows: [
+        { first_name: 'Ada', last_name: 'Lovelace', design: '' },
+        { first_name: 'Grace', last_name: 'Hopper', design: 'menu-veg' },
+      ],
+      sheet: A4,
+      design: PLACE_CARD,
+      margin: mm(10),
+      cropMarks: true,
+      layouts,
+    });
+    if (!isOk(result)) throw new Error(result.error.message);
+    expect(result.value.sheetCount).toBe(1);
+    expect(result.value.recordsRendered).toBe(2);
   });
 });

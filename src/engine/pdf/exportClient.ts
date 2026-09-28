@@ -66,8 +66,12 @@ export function fontsForExport(nodes?: readonly SceneNode[]): ExportJob['fonts']
  * touches IndexedDB, which keeps it off a store the autosave is also writing
  * to (CLAUDE.md §2.1).
  */
-export async function assetsForExport(nodes: readonly SceneNode[]): Promise<ExportJob['assets']> {
-  const ids = new Set<string>();
+export async function assetsForExport(
+  nodes: readonly SceneNode[],
+  /** Extra ids to ship — the image library, when a binding may pick from it. */
+  library: Iterable<string> = [],
+): Promise<ExportJob['assets']> {
+  const ids = new Set<string>(library);
 
   const walk = (list: readonly Node[]) => {
     for (const node of list) {

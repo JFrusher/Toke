@@ -26,7 +26,8 @@ import { err, ok, type Result } from '@/lib/result';
  * A v1 file has no crop, which means the whole image; `migrate` fills it in on
  * read so nothing downstream has to know the format changed.
  */
-export const SCHEMA_VERSION = 2;
+/** 3: column bindings on nodes, and named images. */
+export const SCHEMA_VERSION = 3;
 
 const MANIFEST = 'manifest.json';
 const DESIGNS = 'designs.json';
@@ -54,6 +55,8 @@ export type TokeAsset = {
   readonly id: string;
   readonly type: string;
   readonly bytes: Uint8Array;
+  /** Library name, which an image binding looks up. Absent before v3. */
+  readonly name?: string;
 };
 
 export type TokeFont = {
@@ -78,6 +81,7 @@ export type TokeManifest = {
   readonly savedAt: string;
   readonly assetIds: readonly string[];
   readonly assetTypes: Readonly<Record<string, string>>;
+  readonly assetNames?: Readonly<Record<string, string>>;
   readonly fontFamilies: readonly string[];
 };
 
@@ -99,10 +103,12 @@ export async function packProject(project: TokeProject): Promise<Result<Uint8Arr
     (project as TokeProject & { __forceVersion?: number }).__forceVersion ?? SCHEMA_VERSION;
 
   const assetTypes: Record<string, string> = {};
+  const assetNames: Record<string, string> = {};
   const files: Record<string, Uint8Array> = {};
 
   for (const asset of project.assets) {
     assetTypes[asset.id] = asset.type;
+    if (asset.name !== undefined) assetNames[asset.id] = asset.name;
     files[`${ASSET_DIR}${safeName(asset.id)}`] = asset.bytes;
   }
 
@@ -117,6 +123,7 @@ export async function packProject(project: TokeProject): Promise<Result<Uint8Arr
     savedAt: new Date().toISOString(),
     assetIds: project.assets.map((asset) => asset.id),
     assetTypes,
+    assetNames,
     fontFamilies: project.fonts.map((font) => font.family),
   };
 
@@ -209,6 +216,9 @@ export async function unpackProject(bytes: Uint8Array): Promise<Result<TokeProje
       id,
       type: manifest.value.assetTypes[id] ?? 'application/octet-stream',
       bytes: payload,
+      ...(manifest.value.assetNames?.[id] === undefined
+        ? {}
+        : { name: manifest.value.assetNames[id] }),
     });
   }
 

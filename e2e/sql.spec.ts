@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
 import { importCsv } from './helpers';
 
@@ -130,4 +131,30 @@ test('the console refuses to re-set a query that is already the source', async (
 
   await expect(page.getByTestId('sql-use-as-source')).toBeDisabled();
   await expect(page.getByTestId('sql-use-as-source')).toContainText('Is the record source');
+});
+
+test('the record source survives save and reopen', async ({ page }) => {
+  // It used to be written as the default `SELECT * FROM guests` whatever the
+  // design used, so a filtered print run came back unfiltered on reopen.
+  await ready(page);
+  await importCsv(page, GUESTS);
+  await openConsole(page);
+  await page.getByTestId('sql-input').fill("SELECT * FROM guests WHERE rsvp_status = 'Accepted'");
+  await page.getByTestId('sql-run').click();
+  await expect(page.getByTestId('sql-results')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('sql-use-as-source').click();
+
+  const download = page.waitForEvent('download');
+  await page.getByTestId('save-project').click();
+  const bytes = await readFile(await (await download).path());
+
+  await ready(page);
+  await page.getByTestId('project-file').setInputFiles({
+    name: 'Filtered.toke',
+    mimeType: 'application/zip',
+    buffer: bytes,
+  });
+
+  await page.getByTestId('mode-live').click();
+  await expect(page.getByTestId('record-counter')).toHaveText('1 / 2', { timeout: 20_000 });
 });
