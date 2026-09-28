@@ -398,3 +398,23 @@ describe('v1.1 — column bindings', () => {
     expect(narrow.findings[0]?.kind).toBe('overflow');
   });
 });
+
+describe('v1.1 — bound geometry off the card', () => {
+  const trim = { width: 240, height: 155 };
+  const moved = {
+    ...rectNode({ id: 'm', x: p(10), y: p(10), width: p(20), height: p(20) }),
+    bind: { x: 'left' },
+  };
+
+  it('reports an object the data moves wholly off the card', () => {
+    const report = preflight({ nodes: [moved], rows: [{ left: '5mm' }, { left: '500mm' }], trim });
+    expect(report.findings).toEqual([
+      expect.objectContaining({ kind: 'binding', nodeId: 'm', recordIndex: 1 }),
+    ]);
+  });
+
+  it('accepts an object that only runs into the bleed', () => {
+    const report = preflight({ nodes: [moved], rows: [{ left: '-3mm' }], trim });
+    expect(report.clean).toBe(true);
+  });
+});

@@ -11,6 +11,7 @@ import { DataGrid } from '@/components/data/DataGrid';
 import { SqlConsole } from '@/components/data/SqlConsole';
 import { ExportDialog } from '@/components/imposition/ExportDialog';
 import { ImpositionPanel } from '@/components/imposition/ImpositionPanel';
+import { DataBindingsPanel } from '@/components/inspector/DataBindingsPanel';
 import { ImageFitPanel } from '@/components/inspector/ImageFitPanel';
 import { TokenBindingPanel } from '@/components/inspector/TokenBindingPanel';
 import { TransformFields } from '@/components/inspector/TransformFields';
@@ -223,6 +224,7 @@ export function AppShell() {
               <TypographyPanel />
               <ImageFitPanel />
               <TokenBindingPanel />
+              <DataBindingsPanel />
               <ImpositionPanel />
             </aside>
           </>

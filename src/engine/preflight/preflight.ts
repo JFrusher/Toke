@@ -36,6 +36,25 @@ export type PreflightReport = {
   readonly clean: boolean;
 };
 
+/**
+ * Visible nodes whose bound geometry leaves them wholly outside the trim.
+ * Partly outside is normal — artwork runs into the bleed on purpose.
+ */
+function offCard(
+  nodes: readonly SceneNode[],
+  trim: { readonly width: number; readonly height: number },
+): SceneNode[] {
+  return [...walk(nodes)].filter(
+    (node) =>
+      node.visible &&
+      (node.bind?.x ?? node.bind?.y ?? node.bind?.width ?? node.bind?.height) !== undefined &&
+      (node.x >= trim.width ||
+        node.y >= trim.height ||
+        node.x + node.width <= 0 ||
+        node.y + node.height <= 0),
+  );
+}
+
 /** Text that will actually print: a node hidden by the data is not checked. */
 function shownTextNodes(nodes: readonly SceneNode[], found: TextNode[] = []): TextNode[] {
   for (const node of nodes) {
@@ -110,6 +129,8 @@ export function preflight(input: {
   assetIds?: ReadonlySet<string>;
   /** Image library for image bindings, `imageKey(name)` → asset id. */
   images?: ReadonlyMap<string, string>;
+  /** Card size. With it, data that moves an object wholly off the card is reported. */
+  trim?: { readonly width: number; readonly height: number };
 }): PreflightReport {
   const findings: Finding[] = structuralFindings(input.nodes, input.assetIds);
   const names = new Map([...walk(input.nodes)].map((node) => [node.id, node.name]));
@@ -137,6 +158,18 @@ export function preflight(input: {
         recordIndex: everywhere ? -1 : index,
         detail: error.message,
       });
+    }
+
+    if (bound !== null && input.trim !== undefined) {
+      for (const node of offCard(bound.nodes, input.trim)) {
+        findings.push({
+          kind: 'binding',
+          nodeId: node.id,
+          nodeName: node.name,
+          recordIndex: index,
+          detail: 'The data places this object entirely off the card.',
+        });
+      }
     }
 
     // hasTokenSyntax, not isTokenised: a malformed token does not parse, so

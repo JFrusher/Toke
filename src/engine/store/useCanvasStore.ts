@@ -12,7 +12,7 @@ import {
 import type { Guide } from '@/engine/canvas/snapping';
 import type { Rect } from '@/engine/geometry/rect';
 import { type Command, createHistory, type History } from '@/engine/history/history';
-import type { NodeId, SceneNode } from '@/engine/scene/types';
+import type { BindableProperty, NodeId, SceneNode } from '@/engine/scene/types';
 import { millimetresToPoints } from '@/engine/units/convert';
 import { millimetres, type Points, points } from '@/engine/units/types';
 
@@ -85,6 +85,8 @@ type CanvasState = Document & {
   /** Toggles on the node and every node inside it, for a group. */
   setNodeVisible: (id: NodeId, visible: boolean) => void;
   setNodeLocked: (id: NodeId, locked: boolean) => void;
+  /** Binds a property to a record-source column; null unbinds it. */
+  setBinding: (id: NodeId, property: BindableProperty, column: string | null) => void;
   addGuide: (guide: Guide) => void;
   removeGuide: (id: string) => void;
   clearGuides: () => void;
@@ -302,6 +304,20 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         replace(
           mapTree(get().nodes, id, (node) => ({ ...node, locked })),
           locked ? 'Lock layer' : 'Unlock layer',
+        ),
+      );
+    },
+    setBinding(id, property, column) {
+      run(
+        replace(
+          mapTree(get().nodes, id, (node) => {
+            const { [property]: _dropped, ...rest } = node.bind ?? {};
+            const bind = column === null ? rest : { ...rest, [property]: column };
+            // No empty object left behind: `bind` present means bound.
+            const { bind: _old, ...unbound } = node;
+            return Object.keys(bind).length === 0 ? (unbound as SceneNode) : { ...node, bind };
+          }),
+          column === null ? `Unbind ${property}` : `Bind ${property} to ${column}`,
         ),
       );
     },

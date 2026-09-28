@@ -28,6 +28,7 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
  */
 export function PreflightReport({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nodes = useCanvasStore((s) => s.nodes);
+  const artboard = useCanvasStore((s) => s.artboard);
   const setSelection = useCanvasStore((s) => s.setSelection);
   const records = useDataStore((s) => s.records);
   const setMode = useStudioStore((s) => s.setMode);
@@ -67,9 +68,10 @@ export function PreflightReport({ open, onClose }: { open: boolean; onClose: () 
             rows: records as readonly Record<string, unknown>[],
             ...(assetIds === undefined ? {} : { assetIds }),
             images,
+            trim: { width: artboard.width, height: artboard.height },
           })
         : null,
-    [open, nodes, records, assetIds, images],
+    [open, nodes, records, assetIds, images, artboard],
   );
 
   const summary = report === null ? null : summarise(report);

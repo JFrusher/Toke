@@ -96,3 +96,55 @@ test('moving a token-bound text in live mode keeps its template', async ({ page 
   await page.getByRole('treeitem').getByRole('button').first().click();
   await expect(page.getByTestId('binding-text')).toHaveValue('{{ first_name }} {{ last_name }}');
 });
+
+const FLAGGED = ['first_name,last_name,is_gf', 'Ada,Lovelace,1', 'Grace,Hopper,0'].join('\n');
+
+async function placeBoundRect(page: Page) {
+  const c = await centre(page);
+  await page.getByTestId('tool-rect').click();
+  await page.mouse.click(c.x - 40, c.y - 20);
+  await page.getByRole('treeitem').getByRole('button').first().click();
+  await page.getByTestId('bind-visible').selectOption('is_gf');
+}
+
+async function proofBytes(page: Page) {
+  await page.getByTestId('open-export').click();
+  const pending = page.waitForEvent('download', { timeout: 90_000 });
+  await page.getByTestId('run-proof').click();
+  return (await readFile(await (await pending).path())).byteLength;
+}
+
+test('an object bound to a column shows only on the records that ask for it', async ({ page }) => {
+  test.setTimeout(120_000);
+  await ready(page);
+  await importCsv(page, FLAGGED);
+  await placeBoundRect(page);
+
+  // A word and the teal, never the colour alone.
+  await expect(page.getByTestId('layer-conditional')).toHaveText('data');
+
+  await page.getByTestId('mode-live').click();
+  const shown = await proofBytes(page);
+  await page.getByRole('button', { name: 'Next record' }).click();
+  const hidden = await proofBytes(page);
+
+  // Record 2 has is_gf = 0: its proof has no rectangle drawn on it.
+  expect(hidden).toBeLessThan(shown);
+});
+
+test('a binding to a column the record source lacks is caught by pre-flight', async ({ page }) => {
+  await ready(page);
+  await importCsv(page, FLAGGED);
+  await placeBoundRect(page);
+
+  // The record source stops returning is_gf; the binding now points at nothing.
+  await page.getByTestId('toggle-data').click();
+  await page.getByTestId('dock-tab-sql').click();
+  await page.getByTestId('sql-input').fill('SELECT first_name, last_name FROM guests');
+  await page.getByTestId('sql-run').click();
+  await expect(page.getByTestId('sql-results')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('sql-use-as-source').click();
+
+  await page.getByTestId('open-preflight').click();
+  await expect(page.getByTestId('preflight-finding').first()).toContainText('no column "is_gf"');
+});
