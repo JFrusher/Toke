@@ -90,6 +90,9 @@ async function run(request: Extract<ExportRequest, { op: 'export' | 'proof' }>):
     cropMarks: job.cropMarks,
     assets,
     images,
+    ...(job.layouts === undefined
+      ? {}
+      : { layouts: { column: job.layouts.column, designs: new Map(job.layouts.designs) } }),
     onProgress: (fraction, sheet) => {
       send({ op: 'progress', fraction, sheet });
     },
