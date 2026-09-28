@@ -15,7 +15,8 @@ import { isErr, isOk } from '@/lib/result';
 const PREVIEW_ROWS = 8;
 
 export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const columns = useDataStore((s) => s.columns);
+  const tableColumns = useDataStore((s) => s.columns);
+  const table = useDataStore((s) => s.table);
   const runImport = useDataStore((s) => s.runImport);
 
   const [text, setText] = useState<string | null>(null);
@@ -23,6 +24,11 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
   const [mode, setMode] = useState<ImportMode>('replace');
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Import into a new table named after the file, rather than the one in the grid. */
+  const [intoNew, setIntoNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  // A new table has nothing to match, so every column is proposed as created.
+  const columns = intoNew ? [] : tableColumns;
 
   const parsed = text === null ? null : parseCsv(text);
   const csv = parsed !== null && isOk(parsed) ? parsed.value : null;
@@ -72,6 +78,8 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
   function reset() {
     setText(null);
     setFilename('');
+    setIntoNew(false);
+    setNewName('');
     setProblem(null);
     setBusy(false);
     setOverrides({});
@@ -81,6 +89,13 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
     if (file === undefined) return;
     setProblem(null);
     setFilename(file.name);
+    setNewName(
+      file.name
+        .replace(/\.[^.]+$/, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, ''),
+    );
     // A new file gets a fresh proposal; corrections made against the previous
     // one would be applied to columns that may not exist.
     setOverrides({});
@@ -92,7 +107,9 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
     setBusy(true);
 
     try {
-      const result = await runImport(text, mode, mapping);
+      const result = intoNew
+        ? await runImport(text, 'create', mapping, newName.trim())
+        : await runImport(text, mode, mapping);
       if (isErr(result)) {
         setProblem(result.error.message);
         reportDiagnostic('import', 'error', result.error);
@@ -228,26 +245,69 @@ export function CsvImportDialog({ open, onClose }: { open: boolean; onClose: () 
             </div>
 
             <fieldset className="flex flex-col gap-1.5">
-              <legend className="font-medium text-[11px] text-ink-muted">On import</legend>
-              {(
-                [
-                  ['replace', 'Replace all existing records'],
-                  ['append', 'Add to existing records'],
-                ] as const
-              ).map(([value, label]) => (
-                <label key={value} className="flex items-center gap-2 text-[12px]">
-                  <input
-                    type="radio"
-                    name="import-mode"
-                    value={value}
-                    checked={mode === value}
-                    onChange={() => setMode(value)}
-                    className="accent-accent"
-                  />
-                  {label}
-                </label>
-              ))}
+              <legend className="font-medium text-[11px] text-ink-muted">Import into</legend>
+              <label className="flex items-center gap-2 text-[12px]">
+                <input
+                  type="radio"
+                  name="import-target"
+                  checked={!intoNew}
+                  onChange={() => {
+                    setIntoNew(false);
+                    setOverrides({});
+                  }}
+                  data-testid="import-into-current"
+                  className="accent-accent"
+                />
+                The <code className="font-mono">{table}</code> table
+              </label>
+              <label className="flex items-center gap-2 text-[12px]">
+                <input
+                  type="radio"
+                  name="import-target"
+                  checked={intoNew}
+                  onChange={() => {
+                    setIntoNew(true);
+                    // Matches made against the old table mean nothing here.
+                    setOverrides({});
+                  }}
+                  data-testid="import-into-new"
+                  className="accent-accent"
+                />
+                A new table, named
+                <input
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  onFocus={() => setIntoNew(true)}
+                  aria-label="New table name"
+                  data-testid="import-table-name"
+                  className="h-6 w-40 rounded-[2px] border border-border-control bg-panel-raised px-1.5 font-mono text-[12px] text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+                />
+              </label>
             </fieldset>
+
+            {!intoNew && (
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="font-medium text-[11px] text-ink-muted">On import</legend>
+                {(
+                  [
+                    ['replace', 'Replace all existing records'],
+                    ['append', 'Add to existing records'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-2 text-[12px]">
+                    <input
+                      type="radio"
+                      name="import-mode"
+                      value={value}
+                      checked={mode === value}
+                      onChange={() => setMode(value)}
+                      className="accent-accent"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+            )}
           </>
         )}
 

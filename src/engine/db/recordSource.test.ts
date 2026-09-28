@@ -3,7 +3,12 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { type DatabaseHandle, openDatabase } from '@/engine/db/database';
-import { columnSchemaFor, runRecordSource } from '@/engine/db/recordSource';
+import {
+  columnSchemaFor,
+  layoutProblems,
+  runRecordSource,
+  variantCounts,
+} from '@/engine/db/recordSource';
 import { migrate } from '@/engine/db/schema';
 import { isErr, isOk } from '@/lib/result';
 
@@ -130,5 +135,47 @@ describe('columnSchemaFor', () => {
     // nothing, otherwise editing the query becomes impossible.
     const set = run('SELECT first_name, last_name FROM guests WHERE 0');
     expect(columnSchemaFor(set).map((c) => c.name)).toEqual(['first_name', 'last_name']);
+  });
+});
+
+describe('variantCounts', () => {
+  it('counts records per value, most first', () => {
+    const rows = [{ d: 'veg' }, { d: 'std' }, { d: 'std' }, { d: null }];
+    expect(variantCounts(rows, 'd')).toEqual([
+      ['std', 2],
+      ['', 1],
+      ['veg', 1],
+    ]);
+  });
+});
+
+describe('layoutProblems', () => {
+  const trim = { width: 240, height: 155 };
+  const designs = [
+    { name: 'Menu Veg', width: 240, height: 155 },
+    { name: 'Tent', width: 240, height: 310 },
+  ];
+
+  it('accepts values naming same-size designs, and blanks', () => {
+    expect(
+      layoutProblems(
+        [
+          ['menu veg', 3],
+          ['', 2],
+        ],
+        designs,
+        trim,
+      ),
+    ).toEqual([]);
+  });
+
+  it('names a value no design has, with its record count', () => {
+    expect(layoutProblems([['vegan', 1]], designs, trim)).toEqual([
+      'No design is called "vegan" (1 record).',
+    ]);
+  });
+
+  it('refuses a design of a different size', () => {
+    expect(layoutProblems([['tent', 4]], designs, trim)[0]).toContain('different size');
   });
 });

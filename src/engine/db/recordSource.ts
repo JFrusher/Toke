@@ -1,6 +1,7 @@
 import { type InferredType, inferType } from '@/engine/db/csv';
 import type { DatabaseHandle } from '@/engine/db/database';
 import type { Row } from '@/engine/db/protocol';
+import { lookup } from '@/engine/tokens/resolver';
 import { appError } from '@/lib/errors';
 import { err, isErr, ok, type Result } from '@/lib/result';
 
@@ -111,4 +112,49 @@ export function columnSchemaFor(set: RecordSet): readonly ColumnSchema[] {
 
     return { name, type: inferType(values) };
   });
+}
+
+/**
+ * How many records each value of a column covers, most first — the "41
+ * standard, 9 veg, 3 GF" a planner checks before a mixed run. Empty cells
+ * count under "".
+ */
+export function variantCounts(
+  rows: readonly Record<string, unknown>[],
+  column: string,
+): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const value = String(lookup(row, column).value ?? '').trim();
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+/**
+ * Why a mixed run cannot go ahead, one line per problem; empty when it can.
+ * Every value must name a design, and every named design must share the run's
+ * trim — cards of different sizes cannot sit in one imposition grid.
+ */
+export function layoutProblems(
+  counts: readonly (readonly [string, number])[],
+  designs: readonly { readonly name: string; readonly width: number; readonly height: number }[],
+  trim: { readonly width: number; readonly height: number },
+): string[] {
+  const byName = new Map(designs.map((design) => [design.name.trim().toLowerCase(), design]));
+  const problems: string[] = [];
+  for (const [value, count] of counts) {
+    if (value === '') continue;
+    const design = byName.get(value.toLowerCase());
+    const records = `${count} ${count === 1 ? 'record' : 'records'}`;
+    if (design === undefined) problems.push(`No design is called "${value}" (${records}).`);
+    else if (
+      Math.abs(design.width - trim.width) > 0.01 ||
+      Math.abs(design.height - trim.height) > 0.01
+    )
+      problems.push(
+        `"${design.name}" is a different size from this design, so it cannot share the run.`,
+      );
+  }
+  return problems;
 }

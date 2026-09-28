@@ -22,6 +22,8 @@ export type AssetRecord = {
   /** Number of scene nodes pointing at this blob. */
   readonly refCount: number;
   readonly createdAt: string;
+  /** The file name it arrived with; what an image binding looks up. */
+  readonly name?: string;
 };
 
 /**
@@ -72,7 +74,7 @@ async function sha256(bytes: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function addAsset(blob: Blob): Promise<Result<AssetRecord>> {
+export async function addAsset(blob: Blob, name?: string): Promise<Result<AssetRecord>> {
   if (blob.size === 0) {
     return err(appError('ASSET_INVALID', 'The file is empty.'));
   }
@@ -84,6 +86,11 @@ export async function addAsset(blob: Blob): Promise<Result<AssetRecord>> {
   if (existing !== undefined) {
     // Identical bytes: reuse the record rather than writing a second copy.
     const { bytes: _bytes, ...record } = existing;
+    // An unnamed copy (placed before names existed) learns its name.
+    if (record.name === undefined && name !== undefined) {
+      await run('readwrite', (store) => store.put({ ...existing, name }));
+      return ok({ ...record, name });
+    }
     return ok(record);
   }
 
@@ -93,6 +100,7 @@ export async function addAsset(blob: Blob): Promise<Result<AssetRecord>> {
     size: blob.size,
     refCount: 0,
     createdAt: new Date().toISOString(),
+    ...(name === undefined ? {} : { name }),
   };
 
   await run('readwrite', (store) => store.put({ ...record, bytes: new Uint8Array(bytes) }));

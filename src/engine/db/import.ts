@@ -12,7 +12,8 @@ import { err, isErr, ok, type Result } from '@/lib/result';
  * place cards that do print look perfectly correct.
  */
 
-export type ImportMode = 'replace' | 'append';
+/** 'create' makes a new table from the file's own columns. */
+export type ImportMode = 'replace' | 'append' | 'create';
 
 export type ImportPlan = {
   readonly table: string;
@@ -85,6 +86,16 @@ export function importCsv(
   const createdColumns: string[] = [];
 
   const applied = db.transaction(() => {
+    if (plan.mode === 'create') {
+      // Only the row id; every column is then added by the 'create' mappings
+      // below, the same path that extends an existing table. The id is what
+      // the grid edits and deletes by.
+      const created = db.exec(`CREATE TABLE ${table} (id INTEGER PRIMARY KEY AUTOINCREMENT)`);
+      if (isErr(created)) {
+        throw new Error(`could not create table "${plan.table}": ${created.error.message}`);
+      }
+    }
+
     // ALTER TABLE lives inside the transaction too: a failed import must not
     // leave orphan columns behind on the table.
     for (const mapping of active) {

@@ -148,10 +148,28 @@ describe('inferType', () => {
 
 describe('proposeMapping', () => {
   const target: TableColumn[] = [
-    { name: 'id', declaredType: 'INTEGER', notNull: false, primaryKey: true },
-    { name: 'first_name', declaredType: 'TEXT', notNull: true, primaryKey: false },
-    { name: 'last_name', declaredType: 'TEXT', notNull: true, primaryKey: false },
-    { name: 'is_vegetarian', declaredType: 'BOOLEAN', notNull: false, primaryKey: false },
+    { name: 'id', declaredType: 'INTEGER', notNull: false, primaryKey: true, hasDefault: false },
+    {
+      name: 'first_name',
+      declaredType: 'TEXT',
+      notNull: true,
+      primaryKey: false,
+      hasDefault: false,
+    },
+    {
+      name: 'last_name',
+      declaredType: 'TEXT',
+      notNull: true,
+      primaryKey: false,
+      hasDefault: false,
+    },
+    {
+      name: 'is_vegetarian',
+      declaredType: 'BOOLEAN',
+      notNull: false,
+      primaryKey: false,
+      hasDefault: false,
+    },
   ];
 
   it('maps exact name matches', () => {

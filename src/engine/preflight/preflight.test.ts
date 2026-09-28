@@ -349,3 +349,72 @@ describe('INC-22 — missing assets', () => {
     expect(report.findings.some((f) => f.kind === 'asset')).toBe(true);
   });
 });
+
+describe('v1.1 — column bindings', () => {
+  const box = { x: p(0), y: p(0), width: p(200), height: p(40) };
+
+  it('does not check text the data hides', () => {
+    const hidden = {
+      ...textNode({ id: 'gf', ...box, text: '{{ nope }}' }),
+      bind: { visible: 'is_gf' },
+    };
+    const report = preflight({ nodes: [hidden], rows: [{ is_gf: 0 }] });
+    expect(report.clean).toBe(true);
+  });
+
+  it('reports a missing binding column once, not per record', () => {
+    const badge = { ...rectNode({ id: 'b', ...box }), bind: { visible: 'nope' } };
+    const report = preflight({ nodes: [badge], rows: [{}, {}, {}] });
+    expect(report.findings).toEqual([
+      expect.objectContaining({ kind: 'binding', nodeId: 'b', recordIndex: -1 }),
+    ]);
+  });
+
+  it('reports a bad value against the record that has it', () => {
+    const badge = { ...rectNode({ id: 'b', ...box }), bind: { fill: 'c' } };
+    const report = preflight({ nodes: [badge], rows: [{ c: '#fff' }, { c: 'green' }] });
+    expect(report.findings).toEqual([expect.objectContaining({ kind: 'binding', recordIndex: 1 })]);
+  });
+
+  it('checks auto-fit against the bound width', () => {
+    const name = {
+      ...textNode({
+        id: 'n',
+        ...box,
+        text: '{{ name }}',
+        autoFit: { mode: 'shrink', minFontSize: p(12) },
+      }),
+      bind: { width: 'w' },
+    };
+    const wide = preflight({
+      nodes: [name],
+      rows: [{ name: 'Bartholomew Fitzgerald', w: '150mm' }],
+    });
+    const narrow = preflight({
+      nodes: [name],
+      rows: [{ name: 'Bartholomew Fitzgerald', w: '10mm' }],
+    });
+    expect(wide.clean).toBe(true);
+    expect(narrow.findings[0]?.kind).toBe('overflow');
+  });
+});
+
+describe('v1.1 — bound geometry off the card', () => {
+  const trim = { width: 240, height: 155 };
+  const moved = {
+    ...rectNode({ id: 'm', x: p(10), y: p(10), width: p(20), height: p(20) }),
+    bind: { x: 'left' },
+  };
+
+  it('reports an object the data moves wholly off the card', () => {
+    const report = preflight({ nodes: [moved], rows: [{ left: '5mm' }, { left: '500mm' }], trim });
+    expect(report.findings).toEqual([
+      expect.objectContaining({ kind: 'binding', nodeId: 'm', recordIndex: 1 }),
+    ]);
+  });
+
+  it('accepts an object that only runs into the bleed', () => {
+    const report = preflight({ nodes: [moved], rows: [{ left: '-3mm' }], trim });
+    expect(report.clean).toBe(true);
+  });
+});

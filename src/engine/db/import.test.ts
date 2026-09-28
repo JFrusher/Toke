@@ -176,3 +176,62 @@ describe('scale', () => {
     expect(elapsed).toBeLessThan(2000);
   });
 });
+
+describe('importing into a new table', () => {
+  function create(csv: string, table = 'suppliers') {
+    const parsed = parseCsv(csv);
+    if (!isOk(parsed)) throw new Error(parsed.error.message);
+    // A new table has no columns to match, so every source column is created.
+    const mappings = proposeMapping(parsed.value.columns, []);
+    return importCsv(db, parsed.value, { table, mode: 'create', mappings });
+  }
+
+  it("creates the table from the file's own columns", () => {
+    const report = create('Company Name,Contact,Order Total\nAcme,Wile,12.5\nGlobex,Hank,40');
+
+    if (!isOk(report)) throw new Error(report.error.message);
+    expect(report.value.inserted).toBe(2);
+    expect(rows('SELECT company_name, contact, order_total FROM suppliers ORDER BY id')).toEqual([
+      { company_name: 'Acme', contact: 'Wile', order_total: 12.5 },
+      { company_name: 'Globex', contact: 'Hank', order_total: 40 },
+    ]);
+  });
+
+  it('gives the table a row id so the grid can edit it', () => {
+    create('name\nAcme');
+    expect(rows('SELECT id FROM suppliers')).toEqual([{ id: 1 }]);
+  });
+
+  it("keeps the file's own id column instead of colliding with the row id", () => {
+    const report = create('id,name\n900,Acme');
+    if (!isOk(report)) throw new Error(report.error.message);
+    expect(rows('SELECT id, csv_id, name FROM suppliers')).toEqual([
+      { id: 1, csv_id: 900, name: 'Acme' },
+    ]);
+  });
+
+  it('refuses a name that is already a table, and changes nothing', () => {
+    const report = create('name\nAcme', 'guests');
+    expect(isErr(report)).toBe(true);
+    expect(
+      rows("SELECT COUNT(*) AS n FROM pragma_table_info('guests') WHERE name = 'name'"),
+    ).toEqual([{ n: 0 }]);
+  });
+
+  it('rolls the new table back if a row fails', () => {
+    const parsed = parseCsv('name\nAcme');
+    if (!isOk(parsed)) throw new Error(parsed.error.message);
+    const report = importCsv(db, parsed.value, {
+      table: 'suppliers',
+      mode: 'create',
+      mappings: [
+        { source: 'name', target: 'name', action: 'create', type: 'text' },
+        { source: 'name', target: 'name', action: 'create', type: 'text' },
+      ],
+    });
+    expect(isErr(report)).toBe(true);
+    expect(rows("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'suppliers'")).toEqual([
+      { n: 0 },
+    ]);
+  });
+});

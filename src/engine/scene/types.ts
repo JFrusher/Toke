@@ -49,7 +49,24 @@ export type NodeBase = {
   readonly opacity: number;
   readonly visible: boolean;
   readonly locked: boolean;
+  /**
+   * Properties driven by record-source columns, as property → column name.
+   * Resolved per row by `engine/scene/bindings.ts`; the authored values above
+   * are what design mode shows and what a NULL cell falls back to.
+   */
+  readonly bind?: Bindings;
 };
+
+export type BindableProperty =
+  | 'visible'
+  | 'fill'
+  | 'stroke'
+  | 'asset'
+  | 'x'
+  | 'y'
+  | 'width'
+  | 'height';
+export type Bindings = Readonly<Partial<Record<BindableProperty, string>>>;
 
 export type TextAlign = 'left' | 'center' | 'right';
 export type FontWeight = 400 | 500 | 600;
